@@ -21,5 +21,5 @@ class Testloading(TestCase):
 
     def test_pattern_wrapped_cwl(self):
         graph = load_cwl_from_location(path=self.wf_url)
-        self.assertNotEqual(None, graph, "Expected non null $graph, found None")
+        self.assertIsNotNone(graph, "Expected non null $graph, found None")
         self.assertIsInstance(graph, list, f"Expecting graph as list, found {type(graph)}")
