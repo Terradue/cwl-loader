@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "cwl_loader"
+name = "cwl-loader"
 dynamic = ["version"]
 description = 'Utility to load a CWL (remote) document'
 
@@ -34,9 +34,9 @@ dependencies = [
 ]
 
 [project.urls]
-Documentation = "https://github.com/eoap/cwl_loader#readme"
-Issues = "https://github.com/eoap/cwl_loader/issues"
-Source = "https://github.com/eoap/cwl_loader"
+Documentation = "https://github.com/eoap/cwl-loader#readme"
+Issues = "https://github.com/eoap/cwl-loader/issues"
+Source = "https://github.com/eoap/cwl-loader"
 
 [tool.hatch.version]
 path = "src/cwl_loader/__about__.py"
