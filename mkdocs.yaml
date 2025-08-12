@@ -1,4 +1,8 @@
 site_name: CWL Loader
+site_url: https://terradue.github.io/cwl_loader/
+site_author: Fabrice Brito, Simone Tripodi
+repo_url: https://github.com/Terradue/cwl_loader/
+repo_name: Terradue/cwl_loader
 
 theme:
     logo: imgs/icon-eoap.png
