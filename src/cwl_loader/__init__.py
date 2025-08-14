@@ -17,7 +17,10 @@ from cwl_utils.parser import (
 )
 from cwl_utils.parser import Process
 from cwltool.load_tool import default_loader
-from cwltool.update import update
+from cwltool.update import (
+    update,
+    ORIGINAL_CWLVERSION
+)
 from gzip import GzipFile
 from io import (
     BytesIO,
@@ -56,7 +59,7 @@ def _clean_part(
 ) -> str:
     return value.split(separator)[-1]
 
-def _clean_process(process: Processes):
+def _clean_process(process: Process):
     process.id = _clean_part(process.id, '#')
 
     logger.info(f"  Cleaning {process.class_} {process.id}...")
@@ -90,6 +93,9 @@ def _clean_process(process: Processes):
                 step.scatter = [_clean_part(scatter, f"{process.id}/") for scatter in step.scatter]
             else:
                 step.scatter = _clean_part(step.scatter, f"{process.id}/")
+    
+    if process.extension_fields:
+        process.extension_fields.pop(ORIGINAL_CWLVERSION)
 
 def _is_url(path_or_url: str) -> bool:
     try:
