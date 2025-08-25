@@ -11,6 +11,7 @@ If not, see <https://creativecommons.org/licenses/by-sa/4.0/>.
 """
 
 import sys
+from collections import OrderedDict
 from cwl_utils.parser import (
     load_document_by_yaml,
     save
@@ -30,9 +31,9 @@ from io import (
 )
 from loguru import logger
 from ruamel.yaml import YAML
+from ruamel.yaml.comments import CommentedMap
 from pathlib import Path
 from typing import (
-    Any,
     Optional,
     TypeVar,
     Union
@@ -62,7 +63,7 @@ def _clean_part(
 def _clean_process(process: Process):
     process.id = _clean_part(process.id, '#')
 
-    logger.info(f"  Cleaning {process.class_} {process.id}...")
+    logger.debug(f"  Cleaning {process.class_} {process.id}...")
 
     for parameters in [ process.inputs, process.outputs ]:
         for parameter in parameters:
@@ -105,7 +106,7 @@ def _is_url(path_or_url: str) -> bool:
         return False
 
 def load_cwl_from_yaml(
-    raw_process: dict,
+    raw_process: Union[dict, CommentedMap],
     uri: Optional[str] = __DEFAULT_BASE_URI__,
     cwl_version: Optional[str] = __TARGET_CWL_VERSION__
 ) -> Processes:
@@ -120,10 +121,10 @@ def load_cwl_from_yaml(
     Returns:
         `Processes`: The parsed CWL Process or Processes (if the CWL document is a `$graph`).
     '''
-    logger.info(f"Updating the model to {cwl_version}...")
+    logger.debug(f"Updating the model of type '{type(raw_process).__name__}' to version '{cwl_version}'...")
 
     updated_process = update(
-        doc=raw_process,
+        doc=raw_process if isinstance(raw_process, CommentedMap) else CommentedMap(OrderedDict(raw_process)),
         loader=default_loader(),
         baseuri=uri,
         enable_dev=False,
@@ -131,7 +132,7 @@ def load_cwl_from_yaml(
         update_to=cwl_version
     )
 
-    logger.info(f"Raw CWL document successfully updated to {cwl_version}! Now converting to the CWL model...")
+    logger.debug(f"Raw CWL document successfully updated to {cwl_version}! Now converting to the CWL model...")
 
     process = load_document_by_yaml(
         yaml=updated_process,
@@ -139,7 +140,7 @@ def load_cwl_from_yaml(
         load_all=True
     )
 
-    logger.info(f"Raw CWL document successfully updated to {cwl_version}! Now dereferencing the FQNs...")
+    logger.debug(f"Raw CWL document successfully updated to {cwl_version}! Now dereferencing the FQNs...")
 
     if isinstance(process, list):
         for p in process:
@@ -147,7 +148,7 @@ def load_cwl_from_yaml(
     else:
         _clean_process(process)
 
-    logger.info('CWL document successfully dereferenced!')
+    logger.debug('CWL document successfully dereferenced!')
 
     return process
 
@@ -168,6 +169,9 @@ def load_cwl_from_stream(
         `Processes`: The parsed CWL Process or Processes (if the CWL document is a `$graph`).
     '''
     cwl_content = _yaml.load(content)
+
+    logger.debug(f"CWL data of type {type(cwl_content)} successfully loaded from stream")
+
     return load_cwl_from_yaml(
         raw_process=cwl_content,
         uri=uri,
@@ -189,7 +193,20 @@ def load_cwl_from_location(
     Returns:
         `Processes`: The parsed CWL Process or Processes (if the CWL document is a `$graph`).
     '''
-    logger.info(f"Loading CWL document from {path}...")
+    logger.debug(f"Loading CWL document from {path}...")
+
+    def _load_cwl_from_stream(stream):
+        logger.debug(f"Reading stream from {path}...")
+
+        loaded = load_cwl_from_stream(
+            content=stream,
+            uri=path,
+            cwl_version=cwl_version
+        )
+
+        logger.debug(f"Stream from {path} successfully load!")
+
+        return loaded
 
     if _is_url(path):
         response = requests.get(path, stream=True)
@@ -205,18 +222,10 @@ def load_cwl_from_location(
         else:
             buffer = combined
 
-        return load_cwl_from_stream(
-            content=TextIOWrapper(buffer, encoding=__DEFAULT_ENCODING__),
-            uri=path,
-            cwl_version=cwl_version
-        )
+        return _load_cwl_from_stream(TextIOWrapper(buffer, encoding=__DEFAULT_ENCODING__))
     elif os.path.exists(path):
         with open(path, 'r', encoding=__DEFAULT_ENCODING__) as f:
-            return load_cwl_from_stream(
-                content=f,
-                uri=path,
-                cwl_version=cwl_version
-            )
+            return _load_cwl_from_stream(f)
     else:
         raise ValueError(f"Invalid source {path}: not a URL or existing file path")
 
