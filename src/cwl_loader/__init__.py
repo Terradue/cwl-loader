@@ -60,6 +60,38 @@ def _clean_part(
 ) -> str:
     return value.split(separator)[-1]
 
+def _is_url(path_or_url: str) -> bool:
+    try:
+        result = urlparse(path_or_url)
+        return all([result.scheme in ('http', 'https'), result.netloc])
+    except Exception:
+        return False
+
+def _dereference_steps(
+    process: Process,
+    uri: Optional[str]
+) -> list[Process]:
+    result = [process]
+
+    for step in getattr(process, 'steps', []):
+        if _is_url(step.run) and not uri in step.run:
+            referenced = load_cwl_from_location(step.run)
+            
+            if isinstance(referenced, list):
+                result += referenced
+
+                if '#' in step.run:
+                    step.run = f"#{step.run.split('#')[-1]}"
+                elif 1 == len(referenced):
+                    step.run = f"#{referenced[0].id}"
+                else:
+                    raise ValueError(f"No entry point provided for $graph referenced by {step.run}")
+            else:
+                result.append(referenced)
+                step.run = f"#{referenced.id}"
+
+    return result
+
 def _clean_process(process: Process):
     process.id = _clean_part(process.id, '#')
 
@@ -98,13 +130,6 @@ def _clean_process(process: Process):
     if process.extension_fields:
         process.extension_fields.pop(ORIGINAL_CWLVERSION)
 
-def _is_url(path_or_url: str) -> bool:
-    try:
-        result = urlparse(path_or_url)
-        return all([result.scheme in ('http', 'https'), result.netloc])
-    except Exception:
-        return False
-
 def load_cwl_from_yaml(
     raw_process: Union[dict, CommentedMap],
     uri: Optional[str] = __DEFAULT_BASE_URI__,
@@ -140,17 +165,24 @@ def load_cwl_from_yaml(
         load_all=True
     )
 
-    logger.debug(f"Raw CWL document successfully updated to {cwl_version}! Now dereferencing the FQNs...")
+    logger.debug(f"Raw CWL document successfully updated to {cwl_version}! Now dereferencing the steps[].run...")
+
+    results = []
 
     if isinstance(process, list):
         for p in process:
-            _clean_process(p)
+            results += _dereference_steps(process=p, uri=uri)
     else:
-        _clean_process(process)
+        results += _dereference_steps(process=process, uri=uri)
+
+    logger.debug(f"steps[].run successfully dereferenced! Now dereferencing the FQNs...")
+
+    for p in results:
+        _clean_process(p)
 
     logger.debug('CWL document successfully dereferenced!')
 
-    return process
+    return results
 
 def load_cwl_from_stream(
     content: Stream,
