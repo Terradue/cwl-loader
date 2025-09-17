@@ -10,7 +10,6 @@ You should have received a copy of the license along with this work.
 If not, see <https://creativecommons.org/licenses/by-sa/4.0/>.
 """
 
-import sys
 from collections import OrderedDict
 from cwl_utils.parser import (
     load_document_by_yaml,
@@ -25,7 +24,6 @@ from cwltool.update import (
 from gzip import GzipFile
 from io import (
     BytesIO,
-    IOBase,
     StringIO,
     TextIOWrapper
 )
@@ -35,18 +33,12 @@ from ruamel.yaml.comments import CommentedMap
 from pathlib import Path
 from typing import (
     Optional,
-    TypeVar,
-    Union
+    List,
+    TextIO
 )
 from urllib.parse import urlparse
 import requests
 import os
-
-Stream = TypeVar('Stream', bound=IOBase)
-'''A generic type to accept `io.IOBase` specializations only.'''
-
-Processes = TypeVar('Processes', bound=Union[Process, list[Process]])
-'''A single CWL Process or a list of Processes union type.'''
 
 __DEFAULT_BASE_URI__ = 'io://'
 __TARGET_CWL_VERSION__ = 'v1.2'
@@ -131,10 +123,10 @@ def _clean_process(process: Process):
         process.extension_fields.pop(ORIGINAL_CWLVERSION)
 
 def load_cwl_from_yaml(
-    raw_process: Union[dict, CommentedMap],
-    uri: Optional[str] = __DEFAULT_BASE_URI__,
-    cwl_version: Optional[str] = __TARGET_CWL_VERSION__
-) -> Processes:
+    raw_process: dict | CommentedMap,
+    uri: str = __DEFAULT_BASE_URI__,
+    cwl_version: str = __TARGET_CWL_VERSION__
+) -> Process | List[Process]:
     '''
     Loads a CWL document from a raw dictionary.
 
@@ -153,7 +145,7 @@ def load_cwl_from_yaml(
         loader=default_loader(),
         baseuri=uri,
         enable_dev=False,
-        metadata={'cwlVersion': cwl_version},
+        metadata=CommentedMap(OrderedDict({'cwlVersion': cwl_version})),
         update_to=cwl_version
     )
 
@@ -182,18 +174,18 @@ def load_cwl_from_yaml(
 
     logger.debug('CWL document successfully dereferenced!')
 
-    return results
+    return results if len(results) > 1 else results[0]
 
 def load_cwl_from_stream(
-    content: Stream,
-    uri: Optional[str] = __DEFAULT_BASE_URI__,
-    cwl_version: Optional[str] = __TARGET_CWL_VERSION__
-) -> Processes:
+    content: TextIO,
+    uri: str = __DEFAULT_BASE_URI__,
+    cwl_version: str = __TARGET_CWL_VERSION__
+) -> Process | List[Process]:
     '''
     Loads a CWL document from a stream of data.
 
     Args:
-        `content` (`Stream`): The stream where reading the CWL document
+        `content` (`TextIO`): The stream where reading the CWL document
         `uri` (`Optional[str]`): The CWL document URI. Default to `io://`
         `cwl_version` (`Optional[str]`): The CWL document version. Default to `v1.2`
 
@@ -212,8 +204,8 @@ def load_cwl_from_stream(
 
 def load_cwl_from_location(
     path: str,
-    cwl_version: Optional[str] = __TARGET_CWL_VERSION__
-) -> Processes:
+    cwl_version: str = __TARGET_CWL_VERSION__
+) -> Process | List[Process]:
     '''
     Loads a CWL document from a URL or a file on the local File System, automatically detected.
 
@@ -263,9 +255,9 @@ def load_cwl_from_location(
 
 def load_cwl_from_string_content(
     content: str,
-    uri: Optional[str] = __DEFAULT_BASE_URI__,
-    cwl_version: Optional[str] = __TARGET_CWL_VERSION__
-) -> Processes:
+    uri: str = __DEFAULT_BASE_URI__,
+    cwl_version: str = __TARGET_CWL_VERSION__
+) -> Process | List[Process]:
     '''
     Loads a CWL document from its textual representation.
 
@@ -284,8 +276,8 @@ def load_cwl_from_string_content(
     )
 
 def dump_cwl(
-    process: Processes,
-    stream: Stream
+    process: Process | List[Process],
+    stream: TextIO
 ):
     '''
     Serializes a CWL document to its YAML representation.
