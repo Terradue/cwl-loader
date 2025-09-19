@@ -10,13 +10,17 @@ You should have received a copy of the license along with this work.
 If not, see <https://creativecommons.org/licenses/by-sa/4.0/>.
 """
 
+from .sort import order_graph_by_dependencies
 from collections import OrderedDict
 from cwl_utils.parser import (
     load_document_by_yaml,
     save
 )
 from cwl_utils.parser import Process
+from cwltool.context import LoadingContext
 from cwltool.load_tool import default_loader
+from cwltool.pack import pack
+from cwltool.process import Process as Tool
 from cwltool.update import (
     update,
     ORIGINAL_CWLVERSION
@@ -32,19 +36,25 @@ from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap
 from pathlib import Path
 from typing import (
-    Optional,
+    Any,
     List,
+    Mapping,
     TextIO
 )
-from urllib.parse import urlparse
+from urllib.parse import (
+    urlparse,
+    urldefrag
+)
 import requests
 import os
 
 __DEFAULT_BASE_URI__ = 'io://'
 __TARGET_CWL_VERSION__ = 'v1.2'
 __DEFAULT_ENCODING__ = 'utf-8'
+__CWL_VERSION__ = 'cwlVersion'
 
 _yaml = YAML()
+_global_loader = default_loader()
 
 def _clean_part(
     value: str,
@@ -61,19 +71,25 @@ def _is_url(path_or_url: str) -> bool:
 
 def _dereference_steps(
     process: Process,
-    uri: Optional[str]
+    uri: str
 ) -> list[Process]:
     result = [process]
 
     for step in getattr(process, 'steps', []):
-        if _is_url(step.run) and not uri in step.run:
-            referenced = load_cwl_from_location(step.run)
+        logger.debug(f"Checking if {step.run} must be externally imported...")
+
+        run_url, fragment = urldefrag(step.run)
+
+        logger.debug(f"run_url: {run_url} - uri: {uri}")
+
+        if run_url and not uri == run_url:
+            referenced = load_cwl_from_location(run_url)
             
             if isinstance(referenced, list):
                 result += referenced
 
-                if '#' in step.run:
-                    step.run = f"#{step.run.split('#')[-1]}"
+                if fragment:
+                    step.run = f"#{fragment}"
                 elif 1 == len(referenced):
                     step.run = f"#{referenced[0].id}"
                 else:
@@ -123,9 +139,10 @@ def _clean_process(process: Process):
         process.extension_fields.pop(ORIGINAL_CWLVERSION)
 
 def load_cwl_from_yaml(
-    raw_process: dict | CommentedMap,
+    raw_process: dict | Mapping[str, Any] | CommentedMap,
     uri: str = __DEFAULT_BASE_URI__,
-    cwl_version: str = __TARGET_CWL_VERSION__
+    cwl_version: str = __TARGET_CWL_VERSION__,
+    sort: bool = True
 ) -> Process | List[Process]:
     '''
     Loads a CWL document from a raw dictionary.
@@ -138,41 +155,60 @@ def load_cwl_from_yaml(
     Returns:
         `Processes`: The parsed CWL Process or Processes (if the CWL document is a `$graph`).
     '''
-    logger.debug(f"Updating the model of type '{type(raw_process).__name__}' to version '{cwl_version}'...")
+    updated_process = raw_process
 
-    updated_process = update(
-        doc=raw_process if isinstance(raw_process, CommentedMap) else CommentedMap(OrderedDict(raw_process)),
-        loader=default_loader(),
-        baseuri=uri,
-        enable_dev=False,
-        metadata=CommentedMap(OrderedDict({'cwlVersion': cwl_version})),
-        update_to=cwl_version
-    )
+    if cwl_version != raw_process[__CWL_VERSION__]:
+        logger.debug(f"Updating the model from version '{raw_process[__CWL_VERSION__]}' to version '{cwl_version}'...")
 
-    logger.debug(f"Raw CWL document successfully updated to {cwl_version}! Now converting to the CWL model...")
+        updated_process = update(
+            doc=raw_process if isinstance(raw_process, CommentedMap) else CommentedMap(OrderedDict(raw_process)),
+            loader=_global_loader,
+            baseuri=uri,
+            enable_dev=False,
+            metadata=CommentedMap(OrderedDict({'cwlVersion': cwl_version})),
+            update_to=cwl_version
+        )
+
+        logger.debug(f"Raw CWL document successfully updated to {cwl_version}!")
+    else:
+        logger.debug(f"No needs to update the Raw CWL document since it targets already the {cwl_version}")
+
+    logger.debug('Parsing the raw CWL document to the CWL Utils DAG...')
+
+    clean_uri, fragment = urldefrag(uri)
+
+    if fragment:
+        logger.debug(f"Ignoring fragment #{fragment} from URI {clean_uri}")
 
     process = load_document_by_yaml(
         yaml=updated_process,
-        uri=uri,
+        uri=clean_uri,
         load_all=True
     )
 
-    logger.debug(f"Raw CWL document successfully updated to {cwl_version}! Now dereferencing the steps[].run...")
+    logger.debug('Raw CWL document successfully parsed to the CWL Utils DAG!')
+
+    logger.debug('Dereferencing the steps[].run...')
 
     results = []
 
     if isinstance(process, list):
-        for p in process:
-            results += _dereference_steps(process=p, uri=uri)
+        for process in process:
+            results += _dereference_steps(process=process, uri=clean_uri)
     else:
-        results += _dereference_steps(process=process, uri=uri)
+        results += _dereference_steps(process=process, uri=clean_uri)
 
     logger.debug(f"steps[].run successfully dereferenced! Now dereferencing the FQNs...")
 
-    for p in results:
-        _clean_process(p)
+    for process in results:
+        _clean_process(process)
 
     logger.debug('CWL document successfully dereferenced!')
+
+    if sort:
+        logger.debug('Sorting Process instances by dependencies....')
+        results = order_graph_by_dependencies(results)
+        logger.debug('Sorting process is over.')
 
     return results if len(results) > 1 else results[0]
 
@@ -290,7 +326,7 @@ def dump_cwl(
         `None`: none.
     '''
     data = save(
-        val=process,
+        val=process, # type: ignore
         relative_uris=False
     )
     _yaml.dump(data=data, stream=stream)
