@@ -10,25 +10,29 @@ You should have received a copy of the license along with this work.
 If not, see <https://creativecommons.org/licenses/by-sa/4.0/>.
 """
 
+from .utils import to_dict
 from cwl_utils.parser import (
     Process,
     Workflow
 )
 from typing import (
-    Dict,
     Iterable,
     List,
+    Mapping,
     Tuple,
     Set
 )
 
 # ---- Utilities --------------------------------------------------------------
 
-def _kahn_toposort(nodes: Iterable[str], edges: Iterable[Tuple[str, str]]) -> List[str]:
+def _kahn_toposort(
+    nodes: Iterable[str],
+    edges: Iterable[Tuple[str, str]]
+) -> List[str]:
     """Return a topo-sorted list of node ids. Raises ValueError on cycles."""
     nodes = set(nodes)
-    succ: Dict[str, Set[str]] = {n: set() for n in nodes}
-    pred_count: Dict[str, int] = {n: 0 for n in nodes}
+    succ: Mapping[str, Set[str]] = {n: set() for n in nodes}
+    pred_count: Mapping[str, int] = {n: 0 for n in nodes}
     for a, b in edges:
         if a not in nodes or b not in nodes:
             # Ignore edges to unknown nodes (e.g., external tools not in $graph)
@@ -56,41 +60,33 @@ def _kahn_toposort(nodes: Iterable[str], edges: Iterable[Tuple[str, str]]) -> Li
 # ---- Global $graph ordering -------------------------------------------------
 
 def order_graph_by_dependencies(
-    processes: Iterable[Process]
+    processes: List[Process]
 ) -> List[Process]:
     """
     Sort top-level parsed objects so that any process referenced by a Workflow step.run
     appears before the Workflow that uses it.
     """
-    by_id: Dict[str, Process] = {}
-    nodes: Set[str] = set()
-
-    for process in processes:
-        pid = getattr(process, "id", None)
-        if not pid:
-            continue
-        by_id[pid] = process
-        nodes.add(pid)
+    by_id: Mapping[str, Process] = to_dict(processes)
 
     edges: List[Tuple[str, str]] = []
     for process in processes:
         # We only add edges from step.run -> workflow.id
-        clsname = type(process).__name__
-        if clsname.endswith("Workflow") and getattr(process, "steps", None):
+        class_name = type(process).__name__
+        if class_name.endswith("Workflow") and getattr(process, "steps", None):
             _order_workflow_steps(process) # type: ignore
 
             workflow_id = process.id
-            for st in process.steps:
-                run = getattr(st, "run", None)
+            for step in getattr(process, "steps", []):
+                run = getattr(step, "run", None)
                 if isinstance(run, str):
-                    rid = run
+                    run_id = run
                 else:
                     # Embedded process object
-                    rid = getattr(getattr(run, "__dict__", {}), "id", getattr(run, "id", "")) or None
-                if rid:
-                    edges.append((rid, workflow_id))
+                    run_id = getattr(getattr(run, "__dict__", {}), "id", getattr(run, "id", "")) or None
+                if run_id:
+                    edges.append((run_id, workflow_id))
 
-    sorted_ids = _kahn_toposort(nodes, edges)
+    sorted_ids = _kahn_toposort(by_id.keys(), edges)
     return [by_id[i] for i in sorted_ids if i in by_id]
 
 # ---- Per-workflow step ordering --------------------------------------------
@@ -101,23 +97,11 @@ def _order_workflow_steps(
     """
     Sort steps within a Workflow so that data dependencies (in[].source) are respected.
     """
-    by_id: Dict[str, object] = {}
-    sid_nodes: Set[str] = set()
+    by_id: Mapping[str, object] = to_dict(workflow.steps)
     edges: List[Tuple[str, str]] = []
-
-    # Collect node ids
-    for step in workflow.steps:
-        sid_nodes.add(step.id)
-        by_id[step.id] = step
 
     # Add edges from producer -> consumer based on in[].source
     for step in workflow.steps:
-        if not getattr(step, "in_", None):   # note: in_ because 'in' is reserved in Python; cwlutils uses in_ in some versions
-            # Some versions keep the field as 'inputs' or 'in'; support both:
-            sources = []
-        else:
-            sources = workflow.__dict__.get("in_", None)
-
         # Compatible access across versions:
         inputs = getattr(step, "in_", None) or getattr(step, "inputs", None) or getattr(step, "in", None)
         if inputs:
@@ -132,8 +116,8 @@ def _order_workflow_steps(
                     # sources are like "stepId/outputName" or "#wf/stepId/output"
                     # Extract the stepId (token before the first '/'), ignoring external ports
                     producer = s.split("/", 1)[0]
-                    if producer in sid_nodes:
+                    if producer in by_id.keys():
                         edges.append((producer, step.id))
 
-    sorted_steps = _kahn_toposort(sid_nodes, edges)
+    sorted_steps = _kahn_toposort(by_id.keys(), edges)
     workflow.steps = [by_id[i] for i in sorted_steps if i in by_id]

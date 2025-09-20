@@ -10,6 +10,7 @@ You should have received a copy of the license along with this work.
 If not, see <https://creativecommons.org/licenses/by-sa/4.0/>.
 """
 
+from .utils import remove_refs
 from .sort import order_graph_by_dependencies
 from collections import OrderedDict
 from cwl_utils.parser import (
@@ -17,14 +18,8 @@ from cwl_utils.parser import (
     save
 )
 from cwl_utils.parser import Process
-from cwltool.context import LoadingContext
 from cwltool.load_tool import default_loader
-from cwltool.pack import pack
-from cwltool.process import Process as Tool
-from cwltool.update import (
-    update,
-    ORIGINAL_CWLVERSION
-)
+from cwltool.update import update
 from gzip import GzipFile
 from io import (
     BytesIO,
@@ -56,12 +51,6 @@ __CWL_VERSION__ = 'cwlVersion'
 _yaml = YAML()
 _global_loader = default_loader()
 
-def _clean_part(
-    value: str,
-    separator: str = '/'
-) -> str:
-    return value.split(separator)[-1]
-
 def _is_url(path_or_url: str) -> bool:
     try:
         result = urlparse(path_or_url)
@@ -70,73 +59,45 @@ def _is_url(path_or_url: str) -> bool:
         return False
 
 def _dereference_steps(
-    process: Process,
+    process: Process | List[Process],
     uri: str
-) -> list[Process]:
-    result = [process]
+) -> List[Process]:
+    def _on_process(
+        p: Process,
+        accumulator: List[Process]
+    ):
+        for step in getattr(p, 'steps', []):
+            logger.debug(f"Checking if {step.run} must be externally imported...")
 
-    for step in getattr(process, 'steps', []):
-        logger.debug(f"Checking if {step.run} must be externally imported...")
+            run_url, fragment = urldefrag(step.run)
 
-        run_url, fragment = urldefrag(step.run)
+            logger.debug(f"run_url: {run_url} - uri: {uri}")
 
-        logger.debug(f"run_url: {run_url} - uri: {uri}")
+            if run_url and not uri == run_url:
+                referenced = load_cwl_from_location(run_url)
+                
+                if isinstance(referenced, list):
+                    accumulator += referenced
 
-        if run_url and not uri == run_url:
-            referenced = load_cwl_from_location(run_url)
-            
-            if isinstance(referenced, list):
-                result += referenced
-
-                if fragment:
-                    step.run = f"#{fragment}"
-                elif 1 == len(referenced):
-                    step.run = f"#{referenced[0].id}"
+                    if fragment:
+                        step.run = f"#{fragment}"
+                    elif 1 == len(referenced):
+                        step.run = f"#{referenced[0].id}"
+                    else:
+                        raise ValueError(f"No entry point provided for $graph referenced by {step.run}")
                 else:
-                    raise ValueError(f"No entry point provided for $graph referenced by {step.run}")
-            else:
-                result.append(referenced)
-                step.run = f"#{referenced.id}"
+                    accumulator.append(referenced)
+                    step.run = f"#{referenced.id}"
+
+    result: List[Process] = process if isinstance(process, list) else [process]
+
+    if isinstance(process, list):
+        for p in process:
+            _on_process(p, result)
+    else:
+         _on_process(process, result)
 
     return result
-
-def _clean_process(process: Process):
-    process.id = _clean_part(process.id, '#')
-
-    logger.debug(f"  Cleaning {process.class_} {process.id}...")
-
-    for parameters in [ process.inputs, process.outputs ]:
-        for parameter in parameters:
-            parameter.id = _clean_part(parameter.id)
-
-            if hasattr(parameter, 'outputSource'):
-                for i, output_source in enumerate(parameter.outputSource):
-                    parameter.outputSource[i] = _clean_part(output_source, f"{process.id}/")
-
-    for step in getattr(process, 'steps', []):
-        step.id = _clean_part(step.id)
-
-        for step_in in getattr(step, 'in_', []):
-            step_in.id = _clean_part(step_in.id)
-            step_in.source = _clean_part(step_in.source, f"{process.id}/")
-
-        if step.out:
-            if isinstance(step.out, list):
-                step.out = [_clean_part(step_out) for step_out in step.out]
-            else:
-               step.out = _clean_part(step)
-
-        if step.run:
-            step.run = step.run[step.run.rfind('#'):]
-
-        if step.scatter:
-            if isinstance(step.scatter, list):
-                step.scatter = [_clean_part(scatter, f"{process.id}/") for scatter in step.scatter]
-            else:
-                step.scatter = _clean_part(step.scatter, f"{process.id}/")
-    
-    if process.extension_fields:
-        process.extension_fields.pop(ORIGINAL_CWLVERSION)
 
 def load_cwl_from_yaml(
     raw_process: dict | Mapping[str, Any] | CommentedMap,
@@ -173,7 +134,7 @@ def load_cwl_from_yaml(
     else:
         logger.debug(f"No needs to update the Raw CWL document since it targets already the {cwl_version}")
 
-    logger.debug('Parsing the raw CWL document to the CWL Utils DAG...')
+    logger.debug('Parsing the raw CWL document to the CWL Utils DOM...')
 
     clean_uri, fragment = urldefrag(uri)
 
@@ -186,31 +147,27 @@ def load_cwl_from_yaml(
         load_all=True
     )
 
-    logger.debug('Raw CWL document successfully parsed to the CWL Utils DAG!')
+    logger.debug('Raw CWL document successfully parsed to the CWL Utils DOM!')
 
     logger.debug('Dereferencing the steps[].run...')
 
-    results = []
-
-    if isinstance(process, list):
-        for process in process:
-            results += _dereference_steps(process=process, uri=clean_uri)
-    else:
-        results += _dereference_steps(process=process, uri=clean_uri)
+    dereferenced_process = _dereference_steps(
+        process=process,
+        uri=uri
+    )
 
     logger.debug(f"steps[].run successfully dereferenced! Now dereferencing the FQNs...")
 
-    for process in results:
-        _clean_process(process)
+    remove_refs(dereferenced_process)
 
     logger.debug('CWL document successfully dereferenced!')
 
     if sort:
         logger.debug('Sorting Process instances by dependencies....')
-        results = order_graph_by_dependencies(results)
+        dereferenced_process = order_graph_by_dependencies(dereferenced_process)
         logger.debug('Sorting process is over.')
 
-    return results if len(results) > 1 else results[0]
+    return dereferenced_process if len(dereferenced_process) > 1 else dereferenced_process[0]
 
 def load_cwl_from_stream(
     content: TextIO,
