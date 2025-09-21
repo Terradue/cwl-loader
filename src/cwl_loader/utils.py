@@ -34,7 +34,7 @@ def to_dict(
 
     return result
 
-def search_workflow(
+def search_process(
     process_id: str,
     process: Process | List[Process]
 ) -> Process | None:
@@ -47,14 +47,24 @@ def search_workflow(
     else:
         return None
 
-def contains_workflow(
+def contains_process(
     process_id: str,
     process: Process | List[Process]
 ) -> bool:
-    return search_workflow(
+    return search_process(
         process_id=process_id,
         process=process
     ) is not None
+
+def assert_process_contained(
+    process_id: str,
+    process: Process | List[Process]
+):
+    if not contains_process(
+        process_id=process_id,
+        process=process
+    ):
+        raise ValueError(f"Process {process_id} does not exist in input CWL document, only {list(map(lambda p: p.id, process)) if isinstance(process, list) else [process.id]} available.")
 
 def _clean_part(
     value: str,
