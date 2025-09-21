@@ -72,6 +72,15 @@ def _clean_part(
 ) -> str:
     return value.split(separator)[-1]
 
+def _clean_values(
+    value: str | List[str],
+    separator: str = '/'
+) -> str | List[str]:
+    if isinstance(value, list):
+        return [_clean_part(value=e, separator=separator) for e in value]
+
+    return _clean_part(value=value, separator=separator)
+
 def remove_refs(
     process: Process | List[Process]
 ):
@@ -86,30 +95,23 @@ def remove_refs(
                 parameter.id = _clean_part(parameter.id)
 
                 if hasattr(parameter, 'outputSource'):
-                    for i, output_source in enumerate(parameter.outputSource):
-                        parameter.outputSource[i] = _clean_part(output_source, f"{process.id}/")
+                    parameter.outputSource = _clean_values(parameter.outputSource, f"{process.id}/")
 
         for step in getattr(process, 'steps', []):
             step.id = _clean_part(step.id)
 
             for step_in in getattr(step, 'in_', []):
                 step_in.id = _clean_part(step_in.id)
-                step_in.source = _clean_part(step_in.source, f"{process.id}/")
+                step_in.source = _clean_values(step_in.source, f"{process.id}/")
 
             if getattr(step, 'out', None):
-                if isinstance(step.out, list):
-                    step.out = [_clean_part(step_out) for step_out in step.out]
-                else:
-                    step.out = _clean_part(step)
+                step.out = _clean_values(step.out)
 
             if getattr(step, 'run', None):
                 step.run = step.run[step.run.rfind('#'):]
 
             if getattr(step, 'scatter', None):
-                if isinstance(step.scatter, list):
-                    step.scatter = [_clean_part(scatter, f"{process.id}/") for scatter in step.scatter]
-                else:
-                    step.scatter = _clean_part(step.scatter, f"{process.id}/")
+                step.scatter = _clean_values(step.scatter, f"{process.id}/")
         
         if process.extension_fields:
             process.extension_fields.pop(ORIGINAL_CWLVERSION)
