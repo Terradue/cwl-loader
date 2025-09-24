@@ -10,7 +10,7 @@ You should have received a copy of the license along with this work.
 If not, see <https://creativecommons.org/licenses/by-sa/4.0/>.
 """
 
-from .utils import to_dict
+from .utils import to_index
 from cwl_utils.parser import (
     Process,
     Workflow
@@ -66,7 +66,7 @@ def order_graph_by_dependencies(
     Sort top-level parsed objects so that any process referenced by a Workflow step.run
     appears before the Workflow that uses it.
     """
-    by_id: Mapping[str, Process] = to_dict(processes)
+    by_id: Mapping[str, Process] = to_index(processes)
 
     edges: List[Tuple[str, str]] = []
     for process in processes:
@@ -97,7 +97,7 @@ def _order_workflow_steps(
     """
     Sort steps within a Workflow so that data dependencies (in[].source) are respected.
     """
-    by_id: Mapping[str, object] = to_dict(workflow.steps)
+    by_id: Mapping[str, object] = to_index(workflow.steps)
     edges: List[Tuple[str, str]] = []
 
     # Add edges from producer -> consumer based on in[].source

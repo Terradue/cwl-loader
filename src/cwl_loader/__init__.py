@@ -10,7 +10,10 @@ You should have received a copy of the license along with this work.
 If not, see <https://creativecommons.org/licenses/by-sa/4.0/>.
 """
 
-from .utils import remove_refs
+from .utils import (
+    assert_connected_graph,
+    remove_refs
+)
 from .sort import order_graph_by_dependencies
 from collections import OrderedDict
 from cwl_utils.parser import (
@@ -28,7 +31,15 @@ from io import (
 )
 from loguru import logger
 from ruamel.yaml import YAML
-from ruamel.yaml.comments import CommentedMap
+from ruamel.yaml.comments import (
+    CommentedMap,
+    CommentedSeq,
+    CommentedSet,
+    TaggedScalar
+)
+from ruamel.yaml.scalarstring import ScalarString
+from ruamel.yaml.scalarfloat import ScalarFloat
+from ruamel.yaml.scalarint import ScalarInt
 from pathlib import Path
 from typing import (
     Any,
@@ -100,7 +111,7 @@ def _dereference_steps(
     return result
 
 def load_cwl_from_yaml(
-    raw_process: dict | Mapping[str, Any] | CommentedMap,
+    raw_process: Mapping[str, Any] | CommentedMap,
     uri: str = __DEFAULT_BASE_URI__,
     cwl_version: str = __TARGET_CWL_VERSION__,
     sort: bool = True
@@ -156,11 +167,15 @@ def load_cwl_from_yaml(
         uri=uri
     )
 
-    logger.debug(f"steps[].run successfully dereferenced! Now dereferencing the FQNs...")
+    logger.debug('steps[].run successfully dereferenced! Dereferencing the FQNs...')
 
     remove_refs(dereferenced_process)
 
-    logger.debug('CWL document successfully dereferenced!')
+    logger.debug('CWL document successfully dereferenced! Now verifying steps[].run integrity...')
+
+    assert_connected_graph(dereferenced_process)
+
+    logger.debug('All steps[].run link are resolvable! ')
 
     if sort:
         logger.debug('Sorting Process instances by dependencies....')
@@ -172,7 +187,8 @@ def load_cwl_from_yaml(
 def load_cwl_from_stream(
     content: TextIO,
     uri: str = __DEFAULT_BASE_URI__,
-    cwl_version: str = __TARGET_CWL_VERSION__
+    cwl_version: str = __TARGET_CWL_VERSION__,
+    sort: bool = True
 ) -> Process | List[Process]:
     '''
     Loads a CWL document from a stream of data.
@@ -192,12 +208,14 @@ def load_cwl_from_stream(
     return load_cwl_from_yaml(
         raw_process=cwl_content,
         uri=uri,
-        cwl_version=cwl_version
+        cwl_version=cwl_version,
+        sort=sort
     )
 
 def load_cwl_from_location(
     path: str,
-    cwl_version: str = __TARGET_CWL_VERSION__
+    cwl_version: str = __TARGET_CWL_VERSION__,
+    sort: bool = True
 ) -> Process | List[Process]:
     '''
     Loads a CWL document from a URL or a file on the local File System, automatically detected.
@@ -218,7 +236,8 @@ def load_cwl_from_location(
         loaded = load_cwl_from_stream(
             content=stream,
             uri=path,
-            cwl_version=cwl_version
+            cwl_version=cwl_version,
+            sort=sort
         )
 
         logger.debug(f"Stream from {path} successfully load!")
@@ -249,7 +268,8 @@ def load_cwl_from_location(
 def load_cwl_from_string_content(
     content: str,
     uri: str = __DEFAULT_BASE_URI__,
-    cwl_version: str = __TARGET_CWL_VERSION__
+    cwl_version: str = __TARGET_CWL_VERSION__,
+    sort: bool = True
 ) -> Process | List[Process]:
     '''
     Loads a CWL document from its textual representation.
@@ -265,13 +285,14 @@ def load_cwl_from_string_content(
     return load_cwl_from_stream(
         content=StringIO(content),
         uri=uri,
-        cwl_version=cwl_version
+        cwl_version=cwl_version,
+        sort=sort
     )
 
 def dump_cwl(
     process: Process | List[Process],
     stream: TextIO
-):
+) -> Mapping[str, Any] | None:
     '''
     Serializes a CWL document to its YAML representation.
 
@@ -286,4 +307,5 @@ def dump_cwl(
         val=process, # type: ignore
         relative_uris=False
     )
+
     _yaml.dump(data=data, stream=stream)

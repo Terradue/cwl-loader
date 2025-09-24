@@ -11,10 +11,13 @@ If not, see <https://creativecommons.org/licenses/by-sa/4.0/>.
 """
 
 from cwl_utils.parser import (
-    Process
+    Process,
+    Workflow
 )
 from cwltool.update import ORIGINAL_CWLVERSION
+from loguru import logger
 from typing import (
+    get_args,
     List,
     Mapping,
     TypeVar
@@ -22,7 +25,7 @@ from typing import (
 
 T = TypeVar('T')
 
-def to_dict(
+def to_index(
     collection: List[T]
 ) -> Mapping[str, T]:
     result: Mapping[str, T] = {}
@@ -115,3 +118,20 @@ def remove_refs(
         
         if process.extension_fields:
             process.extension_fields.pop(ORIGINAL_CWLVERSION)
+
+def assert_connected_graph(
+    process: Process | List[Process]
+):
+    index: Mapping[str, Process] = to_index(process) if isinstance(process, list) else { process.id: process }
+    issues: List[str] = []
+
+    for process in index.values():
+        if any(isinstance(process, typ) for typ in get_args(Workflow)):
+            for step in getattr(process, 'steps', []):
+                if isinstance(step.run, str):
+                    if not index.get(step.run[1:]):
+                        issues .append(f"- {process.id}.steps.{step.id} = {step.run}")
+
+    if issues:
+        nl = '\n'
+        raise ValueError(f"Detected unresolved links in the input $graph:\n{nl.join(issues)}")
