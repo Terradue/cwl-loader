@@ -31,12 +31,7 @@ from io import (
 )
 from loguru import logger
 from ruamel.yaml import YAML
-from ruamel.yaml.comments import (
-    CommentedMap,
-    CommentedSeq,
-    CommentedSet,
-    TaggedScalar
-)
+from ruamel.yaml.comments import CommentedMap
 from ruamel.yaml.scalarstring import ScalarString
 from ruamel.yaml.scalarfloat import ScalarFloat
 from ruamel.yaml.scalarint import ScalarInt

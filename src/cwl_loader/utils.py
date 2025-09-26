@@ -105,7 +105,8 @@ def remove_refs(
 
             for step_in in getattr(step, 'in_', []):
                 step_in.id = _clean_part(step_in.id)
-                step_in.source = _clean_values(step_in.source, f"{process.id}/")
+                if step_in.source:
+                    step_in.source = _clean_values(step_in.source, f"{process.id}/")
 
             if getattr(step, 'out', None):
                 step.out = _clean_values(step.out)
