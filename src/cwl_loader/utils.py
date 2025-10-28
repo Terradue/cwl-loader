@@ -43,9 +43,9 @@ def search_process(
 ) -> Process | None:
     if isinstance(process, list):
         for wf in process:
-            if process_id in wf.id:
+            if process_id == wf.id:
                 return wf
-    elif process_id in process.id:
+    elif process_id == process.id:
         return process
     else:
         return None
