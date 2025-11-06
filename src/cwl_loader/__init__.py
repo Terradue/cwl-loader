@@ -1,14 +1,16 @@
-"""
-The CWL Loader Python library is a helper library to simplify the parse and serialize operations of CWL documents to and from [cwl-utils](https://github.com/common-workflow-language/cwl-utils) object models.
-
-CWL Loader (c) 2025
-
-CWL Loader is licensed under
-Creative Commons Attribution-ShareAlike 4.0 International.
-
-You should have received a copy of the license along with this work.
-If not, see <https://creativecommons.org/licenses/by-sa/4.0/>.
-"""
+# Copyright 2025 Terradue
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 from .utils import (
     assert_connected_graph,
@@ -287,7 +289,7 @@ def load_cwl_from_string_content(
 def dump_cwl(
     process: Process | List[Process],
     stream: TextIO
-) -> Mapping[str, Any] | None:
+):
     '''
     Serializes a CWL document to its YAML representation.
 
