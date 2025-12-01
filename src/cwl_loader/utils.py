@@ -12,9 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This workflow will install Python dependencies, run tests and lint with a single version of Python
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python
-
 from cwl_utils.parser import (
     Process,
     Workflow
@@ -25,6 +22,7 @@ from typing import (
     get_args,
     List,
     Mapping,
+    Optional,
     TypeVar
 )
 
@@ -76,13 +74,13 @@ def assert_process_contained(
 
 def _clean_part(
     value: str,
-    separator: str = '/'
+    separator: Optional[str] = '/'
 ) -> str:
     return value.split(separator)[-1]
 
 def _clean_values(
     value: str | List[str],
-    separator: str = '/'
+    separator: Optional[str] = '/'
 ) -> str | List[str]:
     if isinstance(value, list):
         return [_clean_part(value=e, separator=separator) for e in value]
@@ -103,7 +101,7 @@ def remove_refs(
                 parameter.id = _clean_part(parameter.id)
 
                 if hasattr(parameter, 'outputSource'):
-                    parameter.outputSource = _clean_values(parameter.outputSource, f"{process.id}/")
+                    parameter.outputSource = _clean_values(parameter.outputSource, f"#{process.id}/")
 
         for step in getattr(process, 'steps', []):
             step.id = _clean_part(step.id)
@@ -111,7 +109,7 @@ def remove_refs(
             for step_in in getattr(step, 'in_', []):
                 step_in.id = _clean_part(step_in.id)
                 if step_in.source:
-                    step_in.source = _clean_values(step_in.source, f"{process.id}/")
+                    step_in.source = _clean_values(step_in.source, f"#{process.id}/")
 
             if getattr(step, 'out', None):
                 step.out = _clean_values(step.out)
@@ -120,7 +118,7 @@ def remove_refs(
                 step.run = step.run[step.run.rfind('#'):]
 
             if getattr(step, 'scatter', None):
-                step.scatter = _clean_values(step.scatter, f"{process.id}/")
+                step.scatter = _clean_values(step.scatter, f"#{process.id}/")
         
         if process.extension_fields:
             process.extension_fields.pop(ORIGINAL_CWLVERSION)
