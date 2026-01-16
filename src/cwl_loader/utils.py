@@ -120,7 +120,7 @@ def remove_refs(
             if getattr(step, 'scatter', None):
                 step.scatter = _clean_values(step.scatter, f"#{process.id}/")
         
-        if ORIGINAL_CWLVERSION in process.extension_fields:
+        if process.extension_fields and ORIGINAL_CWLVERSION in process.extension_fields:
             process.extension_fields.pop(ORIGINAL_CWLVERSION)
 
 def assert_connected_graph(
