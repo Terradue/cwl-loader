@@ -59,6 +59,87 @@ __CWL_VERSION__ = 'cwlVersion'
 _yaml = YAML()
 _global_loader = default_loader()
 
+_custom_requirements_cache = {}
+_original_namespaces = {}
+
+def _clean_custom_namespaces(raw_process: Mapping[str, Any] | CommentedMap) -> Mapping[str, Any] | CommentedMap:
+    """
+    Remove $namespaces, schemas and custom requirements with namespace prefixes.
+    Store custom requirements in a cache for later retrieval.
+
+    Note: $namespaces and schemas declarations don't cause validation errors by themselves.
+    Only the use of custom requirements (like calrissian:DaskGatewayRequirement) causes errors
+    in cwl_utils parser because it doesn't recognize them.
+
+    Args:
+        raw_process: The raw CWL document as dict or CommentedMap
+
+    Returns:
+        Cleaned CWL document without custom namespaced requirements
+    """
+    cleaned = raw_process.copy() if isinstance(raw_process, dict) else CommentedMap(raw_process)
+
+    if '$namespaces' in cleaned:
+        _original_namespaces['__root__'] = dict(cleaned['$namespaces'])
+        logger.debug(f"Saved original $namespaces: {_original_namespaces['__root__']}")
+
+    # The custom requirements in $graph items
+    # We need to remove them for validation, but preserve them for Calrissian/custom runners
+    if '$graph' in cleaned and isinstance(cleaned['$graph'], list):
+        for item in cleaned['$graph']:
+            if isinstance(item, dict):
+                item_id = item.get('id', 'unknown')
+
+                if 'requirements' in item and isinstance(item['requirements'], dict):
+                    custom_reqs = {}
+                    standard_reqs = {}
+
+                    for req_name, req_value in item['requirements'].items():
+                        if ':' in str(req_name):
+                            logger.debug(f"Storing custom requirement for {item_id}: {req_name}")
+                            custom_reqs[req_name] = req_value
+                        else:
+                            standard_reqs[req_name] = req_value
+
+                    if custom_reqs:
+                        _custom_requirements_cache[item_id] = custom_reqs
+
+                    item['requirements'] = standard_reqs
+
+                elif 'requirements' in item and isinstance(item['requirements'], list):
+                    custom_reqs = []
+                    standard_reqs = []
+
+                    for req in item['requirements']:
+                        if isinstance(req, dict):
+                            req_class = req.get('class', '')
+                            if ':' in str(req_class):
+                                logger.debug(f"Storing custom requirement for {item_id}: {req_class}")
+                                custom_reqs.append(req)
+                            else:
+                                standard_reqs.append(req)
+                        else:
+                            standard_reqs.append(req)
+
+                    if custom_reqs:
+                        _custom_requirements_cache[item_id] = custom_reqs
+
+                    item['requirements'] = standard_reqs
+
+    return cleaned
+
+def get_custom_requirements(item_id: str) -> List[Any] | Mapping[str, Any]:
+    """
+    Retrieve custom requirements for a given item ID.
+
+    Args:
+        item_id: The ID of the CWL item (CommandLineTool, Workflow, etc.)
+
+    Returns:
+        Custom requirements (list or dict) or empty list if none found
+    """
+    return _custom_requirements_cache.get(item_id, [])
+
 def _is_url(path_or_url: str) -> bool:
     try:
         result = urlparse(path_or_url)
@@ -120,17 +201,21 @@ def load_cwl_from_yaml(
         `raw_process` (`dict`): The dictionary representing the CWL document
         `uri` (`Optional[str]`): The CWL document URI. Default to `io://`
         `cwl_version` (`Optional[str]`): The CWL document version. Default to `v1.2`
+        `sort` (`Optional[bool]`): Sort processes by dependencies. Default to `True`
 
     Returns:
         `Processes`: The parsed CWL Process or Processes (if the CWL document is a `$graph`).
     '''
-    updated_process = raw_process
+    # Clean custom namespaces and requirements before processing
+    cleaned_process = _clean_custom_namespaces(raw_process)
 
-    if cwl_version != raw_process[__CWL_VERSION__]:
-        logger.debug(f"Updating the model from version '{raw_process[__CWL_VERSION__]}' to version '{cwl_version}'...")
+    updated_process = cleaned_process
+
+    if cwl_version != cleaned_process[__CWL_VERSION__]:
+        logger.debug(f"Updating the model from version '{cleaned_process[__CWL_VERSION__]}' to version '{cwl_version}'...")
 
         updated_process = update(
-            doc=raw_process if isinstance(raw_process, CommentedMap) else CommentedMap(OrderedDict(raw_process)),
+            doc=cleaned_process if isinstance(cleaned_process, CommentedMap) else CommentedMap(OrderedDict(cleaned_process)),
             loader=_global_loader,
             baseuri=uri,
             enable_dev=False,
@@ -306,3 +391,110 @@ def dump_cwl(
     )
 
     _yaml.dump(data=data, stream=stream)
+
+def dump_cwl_with_custom_requirements(
+    process: Process | List[Process],
+    stream: TextIO,
+    custom_requirements_cache: Mapping[str, Any] | None = None
+):
+    '''
+    Serializes a CWL document with custom requirements properly reinjected into the requirements section.
+
+    This function ensures that custom namespaced requirements (like calrissian:DaskGatewayRequirement)
+    are placed in the correct location within the 'requirements' section.
+
+    Args:
+        `process` (`Processes`): The CWL Process or Processes (if the CWL document is a `$graph`)
+        `stream` (`Stream`): The stream where serializing the CWL document
+        `custom_requirements_cache` (`Mapping[str, Any]`, optional): Cache of custom requirements.
+                                    If None, uses the global _custom_requirements_cache.
+
+    Returns:
+        `None`: none.
+    '''
+    if custom_requirements_cache is None:
+        custom_requirements_cache = _custom_requirements_cache
+
+    data = save(
+        val=process, # type: ignore
+        relative_uris=False
+    )
+
+    if '__root__' in _original_namespaces:
+        data['$namespaces'] = _original_namespaces['__root__']
+        logger.debug(f"Restored original $namespaces: {data['$namespaces']}")
+
+    if '$graph' in data and isinstance(data['$graph'], list):
+        for item in data['$graph']:
+            if isinstance(item, dict):
+                item_id = item.get('id')
+
+                if 'cwlVersion' in item:
+                    del item['cwlVersion']
+                if '$namespaces' in item:
+                    del item['$namespaces']
+
+                if item_id and item_id in custom_requirements_cache:
+                    custom_reqs = custom_requirements_cache[item_id]
+
+                    if 'requirements' not in item:
+                        item['requirements'] = []
+
+                    if not isinstance(item['requirements'], list):
+                        item['requirements'] = []
+
+                    # Add custom requirements in the same format as standard requirements
+                    if isinstance(custom_reqs, list):
+                        for custom_req in custom_reqs:
+                            item['requirements'].append(custom_req)
+                    elif isinstance(custom_reqs, dict):
+                        for req_name, req_value in custom_reqs.items():
+                            # Create a requirement dict in CWL format with 'class' field
+                            custom_req_entry = {'class': req_name}
+
+                            # Add all properties from req_value
+                            if isinstance(req_value, dict):
+                                custom_req_entry.update(req_value)
+
+                            item['requirements'].append(custom_req_entry)
+
+    _yaml.dump(data=data, stream=stream)
+
+def extract_dask_config(
+    custom_requirements_cache: Mapping[str, Any] | None = None
+) -> Mapping[str, Any]:
+    '''
+    Extracts Dask Gateway configuration from custom requirements cache.
+
+    This utility function searches for DaskGatewayRequirement in the custom requirements
+    and returns a dictionary with the Dask configuration parameters.
+
+    Args:
+        `custom_requirements_cache` (`Mapping[str, Any]`, optional): Cache of custom requirements.
+                                     If None, uses the global _custom_requirements_cache.
+
+    Returns:
+        `Mapping[str, Any]`: Dictionary containing all fields found in the
+                            DaskGatewayRequirement (except the `class` key when
+                            the requirement is represented as a list item).
+                            Returns empty dict if no DaskGatewayRequirement found.
+    '''
+    if custom_requirements_cache is None:
+        custom_requirements_cache = _custom_requirements_cache
+
+    for item_id, reqs in custom_requirements_cache.items():
+        if isinstance(reqs, dict):
+            for req_name, req_value in reqs.items():
+                if 'DaskGatewayRequirement' in req_name:
+                    logger.debug(f"Found DaskGatewayRequirement in {item_id}")
+                    return dict(req_value) if isinstance(req_value, dict) else {}
+        elif isinstance(reqs, list):
+            for req in reqs:
+                if isinstance(req, dict):
+                    req_class = req.get('class', '')
+                    if 'DaskGatewayRequirement' in req_class:
+                        logger.debug(f"Found DaskGatewayRequirement in {item_id}")
+                        return {k: v for k, v in req.items() if k != 'class'}
+
+    logger.debug("No DaskGatewayRequirement found in custom requirements cache")
+    return {}
