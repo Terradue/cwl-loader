@@ -23,6 +23,8 @@ classifiers = [
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
   "Programming Language :: Python :: Implementation :: CPython",
   "Programming Language :: Python :: Implementation :: PyPy",
 ]
@@ -71,18 +73,26 @@ exclude_lines = [
 [tool.hatch.envs.test]
 skip-install = false
 
-dependencies = [
-  "cwl-utils==0.37",
-  "loguru",
-  "pyyaml",
-  "nose2",
-]
+dependencies = []
 
 
 [tool.hatch.envs.test.scripts]
-test = "hatch run nose2"
-testv = "hatch run nose2 --verbose"
-cov = ["coverage run --source=src/cwl_loader -m nose2", "coverage report"]
+test = "python -m unittest discover -s tests -p 'test_*.py'"
+testv = "python -m unittest discover -s tests -p 'test_*.py' -v"
+cov = ["coverage run --source=src/cwl_loader -m unittest discover -s tests -p 'test_*.py'", "coverage report"]
+test-show-setup = "python -m unittest discover -s tests -p 'test_*.py' -v"
 
 [[tool.hatch.envs.test.matrix]]
-python = ["3.9", "3.10", "3.11", "3.12", "3.13"]
+python = ["3.10", "3.11", "3.12", "3.13", "3.14"]
+
+[tool.hatch.envs.dev]
+description = "Development environment"
+dependencies = [
+  "pytest>=8.0",
+  "ruff",
+]
+
+
+[tool.hatch.envs.dev.scripts]
+lint = "ruff format ."
+check = "ruff check --fix"
