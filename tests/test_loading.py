@@ -18,10 +18,10 @@
 from cwl_loader import load_cwl_from_location
 from unittest import TestCase
 
-class Testloading(TestCase):
 
+class Testloading(TestCase):
     def setUp(self):
-        self.wf_url = 'https://raw.githubusercontent.com/eoap/application-package-patterns/refs/heads/main/cwl-workflow/pattern-1.cwl'
+        self.wf_url = "https://raw.githubusercontent.com/eoap/application-package-patterns/refs/heads/main/cwl-workflow/pattern-1.cwl"
 
     def tearDown(self):
         pass
@@ -29,4 +29,6 @@ class Testloading(TestCase):
     def test_pattern_wrapped_cwl(self):
         graph = load_cwl_from_location(path=self.wf_url)
         self.assertIsNotNone(graph, "Expected non null $graph, found None")
-        self.assertIsInstance(graph, list, f"Expecting graph as list, found {type(graph)}")
+        self.assertIsInstance(
+            graph, list, f"Expecting graph as list, found {type(graph)}"
+        )
