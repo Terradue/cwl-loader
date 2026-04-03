@@ -24,10 +24,6 @@ from io import BytesIO, StringIO, TextIOWrapper
 from loguru import logger
 from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap
-from ruamel.yaml.scalarstring import ScalarString
-from ruamel.yaml.scalarfloat import ScalarFloat
-from ruamel.yaml.scalarint import ScalarInt
-from pathlib import Path
 from typing import (
     Any,
     List,
@@ -151,8 +147,8 @@ def _clean_custom_namespaces(
     Extract custom namespaced requirements and record ``$namespaces`` for later
     restoration.
 
-    Custom requirements — those whose dict key (dict-form) or ``class`` value
-    (list-form) contains a colon — are removed so that the standard CWL parser
+    Custom requirements - those whose dict key (dict-form) or ``class`` value
+    (list-form) contains a colon - are removed so that the standard CWL parser
     does not reject them.  Both ``$graph`` documents and single top-level process
     documents are handled.
 
@@ -296,7 +292,7 @@ def load_cwl_from_yaml(
 
     Returns:
         `Processes`: The parsed CWL Process or Processes (if the CWL document is a `$graph`).
-    '''
+    """
     global _load_depth
 
     # At the top-level load (not a recursive call from _dereference_steps) clear
@@ -500,7 +496,7 @@ def _inject_custom_reqs_into_item(item: dict, custom_reqs: Any) -> None:
     Reinject *custom_reqs* (list or dict form) into ``item['requirements']``.
 
     All custom requirements (including calrissian:DaskGatewayRequirement) are
-    injected into ``requirements`` so that Calrissian can find them — it reads
+    injected into ``requirements`` so that Calrissian can find them - it reads
     DaskGatewayRequirement from ``requirements``, not ``hints``.
     """
     if 'requirements' not in item or not isinstance(item['requirements'], list):
@@ -529,7 +525,7 @@ def dump_cwl_with_custom_requirements(
     custom_requirements_cache: Optional[Mapping[str, Any]] = None,
     original_namespaces: Optional[Mapping[str, Any]] = None
 ):
-    '''
+    """
     Serializes a CWL document with custom requirements properly reinjected into the requirements section.
 
     This function ensures that custom namespaced requirements (like calrissian:DaskGatewayRequirement)
@@ -545,7 +541,7 @@ def dump_cwl_with_custom_requirements(
 
     Returns:
         `None`: none.
-    '''
+    """
     if custom_requirements_cache is None:
         custom_requirements_cache = _custom_requirements_cache
     if original_namespaces is None:
@@ -588,7 +584,7 @@ def dump_cwl_with_custom_requirements(
 def extract_dask_config(
     custom_requirements_cache: Optional[Mapping[str, Any]] = None
 ) -> Mapping[str, Any]:
-    '''
+    """
     Extracts Dask Gateway configuration from custom requirements cache.
 
     This utility function searches for DaskGatewayRequirement in the custom requirements
@@ -603,7 +599,7 @@ def extract_dask_config(
                             DaskGatewayRequirement (except the `class` key when
                             the requirement is represented as a list item).
                             Returns empty dict if no DaskGatewayRequirement found.
-    '''
+    """
     if custom_requirements_cache is None:
         custom_requirements_cache = _custom_requirements_cache
 
