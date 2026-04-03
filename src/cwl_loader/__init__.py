@@ -24,18 +24,8 @@ from io import BytesIO, StringIO, TextIOWrapper
 from loguru import logger
 from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap
-from typing import (
-    Any,
-    List,
-    Mapping,
-    Optional,
-    TextIO,
-    Tuple
-)
-from urllib.parse import (
-    urlparse,
-    urldefrag
-)
+from typing import Any, List, Mapping, Optional, TextIO, Tuple
+from urllib.parse import urlparse, urldefrag
 import copy
 import requests
 import os
@@ -56,11 +46,7 @@ _original_namespaces: dict = {}
 _load_depth: int = 0
 
 
-def _extract_custom_reqs_from_item(
-    item: dict,
-    item_id: str,
-    req_cache: dict
-) -> None:
+def _extract_custom_reqs_from_item(item: dict, item_id: str, req_cache: dict) -> None:
     """
     Remove custom namespaced requirements from ``item['requirements']`` (and
     ``item['hints']`` as fallback) in-place, storing them in *req_cache* keyed
@@ -76,64 +62,68 @@ def _extract_custom_reqs_from_item(
     collected: list = []
 
     # --- process requirements ---
-    reqs = item.get('requirements')
+    reqs = item.get("requirements")
     if isinstance(reqs, dict):
         custom_reqs: dict = {}
         standard_reqs: dict = {}
         for req_name, req_value in reqs.items():
-            if ':' in str(req_name):
+            if ":" in str(req_name):
                 logger.debug(f"Storing custom requirement for {item_id}: {req_name}")
                 custom_reqs[req_name] = req_value
             else:
                 standard_reqs[req_name] = req_value
         if custom_reqs:
-            collected.append(('dict', custom_reqs))
-        item['requirements'] = standard_reqs
+            collected.append(("dict", custom_reqs))
+        item["requirements"] = standard_reqs
     elif isinstance(reqs, list):
         custom_reqs_list: list = []
         standard_reqs_list: list = []
         for req in reqs:
             if isinstance(req, dict):
-                req_class = req.get('class', '')
-                if ':' in str(req_class):
-                    logger.debug(f"Storing custom requirement for {item_id}: {req_class}")
+                req_class = req.get("class", "")
+                if ":" in str(req_class):
+                    logger.debug(
+                        f"Storing custom requirement for {item_id}: {req_class}"
+                    )
                     custom_reqs_list.append(req)
                 else:
                     standard_reqs_list.append(req)
             else:
                 standard_reqs_list.append(req)
         if custom_reqs_list:
-            collected.append(('list', custom_reqs_list))
-        item['requirements'] = standard_reqs_list
+            collected.append(("list", custom_reqs_list))
+        item["requirements"] = standard_reqs_list
 
     # --- process hints (fallback: custom reqs may have landed here) ---
-    hints = item.get('hints')
+    hints = item.get("hints")
     if isinstance(hints, list):
         custom_hints: list = []
         standard_hints: list = []
         for hint in hints:
             if isinstance(hint, dict):
-                hint_class = hint.get('class', '')
-                if ':' in str(hint_class):
-                    logger.debug(f"Storing custom hint as requirement for {item_id}: {hint_class}")
+                hint_class = hint.get("class", "")
+                if ":" in str(hint_class):
+                    logger.debug(
+                        f"Storing custom hint as requirement for {item_id}: {hint_class}"
+                    )
                     custom_hints.append(hint)
                 else:
                     standard_hints.append(hint)
             else:
                 standard_hints.append(hint)
         if custom_hints:
-            collected.append(('list', custom_hints))
-        item['hints'] = standard_hints
+            collected.append(("list", custom_hints))
+        item["hints"] = standard_hints
 
     # Merge all collected custom reqs into a single list for this item
     if collected:
         merged: list = []
         for form, data in collected:
-            if form == 'list':
+            if form == "list":
                 merged.extend(data)
             else:  # dict form → convert to list form for uniform injection
                 for req_name, req_value in data.items():
-                    entry: dict = {'class': req_name}
+                    entry: dict = {"class": req_name}
                     if isinstance(req_value, dict):
                         entry.update(req_value)
                     merged.append(entry)
@@ -141,7 +131,7 @@ def _extract_custom_reqs_from_item(
 
 
 def _clean_custom_namespaces(
-    raw_process: Mapping[str, Any]
+    raw_process: Mapping[str, Any],
 ) -> Tuple[Mapping[str, Any], dict, dict]:
     """
     Extract custom namespaced requirements and record ``$namespaces`` for later
@@ -168,30 +158,34 @@ def _clean_custom_namespaces(
           empty dict otherwise.
     """
     # Shallow-copy the top level so we do not mutate the caller's mapping.
-    cleaned: Any = raw_process.copy() if isinstance(raw_process, dict) else CommentedMap(raw_process)
+    cleaned: Any = (
+        raw_process.copy()
+        if isinstance(raw_process, dict)
+        else CommentedMap(raw_process)
+    )
     req_cache: dict = {}
     ns_store: dict = {}
 
-    if '$namespaces' in cleaned:
-        ns_store['__root__'] = dict(cleaned['$namespaces'])
+    if "$namespaces" in cleaned:
+        ns_store["__root__"] = dict(cleaned["$namespaces"])
         logger.debug(f"Saved original $namespaces: {ns_store['__root__']}")
 
-    if '$graph' in cleaned and isinstance(cleaned['$graph'], list):
+    if "$graph" in cleaned and isinstance(cleaned["$graph"], list):
         # Rebuild the $graph list using deep copies of each item so that we can
         # mutate requirements without touching the caller's original objects.
         new_graph = []
-        for item in cleaned['$graph']:
+        for item in cleaned["$graph"]:
             if isinstance(item, dict):
                 item = copy.deepcopy(item)
-                item_id = item.get('id', 'unknown')
+                item_id = item.get("id", "unknown")
                 _extract_custom_reqs_from_item(item, item_id, req_cache)
             new_graph.append(item)
-        cleaned['$graph'] = new_graph
-    elif 'requirements' in cleaned:
+        cleaned["$graph"] = new_graph
+    elif "requirements" in cleaned:
         # Single top-level process (CommandLineTool / Workflow / …).
         # Deep-copy the entire cleaned document before mutating it.
         cleaned = copy.deepcopy(cleaned)
-        item_id = cleaned.get('id', '__top__')
+        item_id = cleaned.get("id", "__top__")
         _extract_custom_reqs_from_item(cleaned, item_id, req_cache)
 
     return cleaned, req_cache, ns_store
@@ -208,7 +202,7 @@ def _lookup_in_cache(item_id: Optional[str], cache: Mapping[str, Any]) -> Option
         return None
     if item_id in cache:
         return cache[item_id]
-    for sep in ('#', '/'):
+    for sep in ("#", "/"):
         if sep in str(item_id):
             short = str(item_id).split(sep)[-1]
             if short in cache:
@@ -306,7 +300,9 @@ def load_cwl_from_yaml(
     try:
         # Clean custom namespaces and requirements before processing.
         # _clean_custom_namespaces never mutates raw_process and returns local dicts.
-        cleaned_process, local_req_cache, local_ns = _clean_custom_namespaces(raw_process)
+        cleaned_process, local_req_cache, local_ns = _clean_custom_namespaces(
+            raw_process
+        )
 
         # Merge per-document caches into the module globals so they are accessible
         # via get_custom_requirements / extract_dask_config without an explicit arg.
@@ -316,22 +312,28 @@ def load_cwl_from_yaml(
         updated_process = cleaned_process
 
         if cwl_version != cleaned_process[__CWL_VERSION__]:
-            logger.debug(f"Updating the model from version '{cleaned_process[__CWL_VERSION__]}' to version '{cwl_version}'...")
+            logger.debug(
+                f"Updating the model from version '{cleaned_process[__CWL_VERSION__]}' to version '{cwl_version}'..."
+            )
 
             updated_process = update(
-                doc=cleaned_process if isinstance(cleaned_process, CommentedMap) else CommentedMap(OrderedDict(cleaned_process)),
+                doc=cleaned_process
+                if isinstance(cleaned_process, CommentedMap)
+                else CommentedMap(OrderedDict(cleaned_process)),
                 loader=_global_loader,
                 baseuri=uri,
                 enable_dev=False,
-                metadata=CommentedMap(OrderedDict({'cwlVersion': cwl_version})),
-                update_to=cwl_version
+                metadata=CommentedMap(OrderedDict({"cwlVersion": cwl_version})),
+                update_to=cwl_version,
             )
 
             logger.debug(f"Raw CWL document successfully updated to {cwl_version}!")
         else:
-            logger.debug(f"No needs to update the Raw CWL document since it targets already the {cwl_version}")
+            logger.debug(
+                f"No needs to update the Raw CWL document since it targets already the {cwl_version}"
+            )
 
-        logger.debug('Parsing the raw CWL document to the CWL Utils DOM...')
+        logger.debug("Parsing the raw CWL document to the CWL Utils DOM...")
 
         clean_uri, fragment = urldefrag(uri)
 
@@ -339,38 +341,40 @@ def load_cwl_from_yaml(
             logger.debug(f"Ignoring fragment #{fragment} from URI {clean_uri}")
 
         process = load_document_by_yaml(
-            yaml=updated_process,
-            uri=clean_uri,
-            load_all=True
+            yaml=updated_process, uri=clean_uri, load_all=True
         )
 
-        logger.debug('Raw CWL document successfully parsed to the CWL Utils DOM!')
+        logger.debug("Raw CWL document successfully parsed to the CWL Utils DOM!")
 
-        logger.debug('Dereferencing the steps[].run...')
+        logger.debug("Dereferencing the steps[].run...")
 
-        dereferenced_process = _dereference_steps(
-            process=process,
-            uri=uri
-        )
+        dereferenced_process = _dereference_steps(process=process, uri=uri)
 
-        logger.debug('steps[].run successfully dereferenced! Dereferencing the FQNs...')
+        logger.debug("steps[].run successfully dereferenced! Dereferencing the FQNs...")
 
         remove_refs(dereferenced_process)
 
-        logger.debug('CWL document successfully dereferenced! Now verifying steps[].run integrity...')
+        logger.debug(
+            "CWL document successfully dereferenced! Now verifying steps[].run integrity..."
+        )
 
         assert_connected_graph(dereferenced_process)
 
-        logger.debug('All steps[].run link are resolvable! ')
+        logger.debug("All steps[].run link are resolvable! ")
 
         if sort:
-            logger.debug('Sorting Process instances by dependencies....')
+            logger.debug("Sorting Process instances by dependencies....")
             dereferenced_process = order_graph_by_dependencies(dereferenced_process)
-            logger.debug('Sorting process is over.')
+            logger.debug("Sorting process is over.")
 
-        return dereferenced_process if len(dereferenced_process) > 1 else dereferenced_process[0]
+        return (
+            dereferenced_process
+            if len(dereferenced_process) > 1
+            else dereferenced_process[0]
+        )
     finally:
         _load_depth -= 1
+
 
 def load_cwl_from_stream(
     content: TextIO,
@@ -491,6 +495,7 @@ def dump_cwl(process: Process | List[Process], stream: TextIO):
 
     _yaml.dump(data=data, stream=stream)
 
+
 def _inject_custom_reqs_into_item(item: dict, custom_reqs: Any) -> None:
     """
     Reinject *custom_reqs* (list or dict form) into ``item['requirements']``.
@@ -499,15 +504,15 @@ def _inject_custom_reqs_into_item(item: dict, custom_reqs: Any) -> None:
     injected into ``requirements`` so that Calrissian can find them - it reads
     DaskGatewayRequirement from ``requirements``, not ``hints``.
     """
-    if 'requirements' not in item or not isinstance(item['requirements'], list):
-        item['requirements'] = []
+    if "requirements" not in item or not isinstance(item["requirements"], list):
+        item["requirements"] = []
 
     if isinstance(custom_reqs, list):
         for custom_req in custom_reqs:
-            item['requirements'].append(custom_req)
+            item["requirements"].append(custom_req)
     elif isinstance(custom_reqs, dict):
         for req_name, req_value in custom_reqs.items():
-            custom_req_entry: dict = {'class': req_name}
+            custom_req_entry: dict = {"class": req_name}
             if isinstance(req_value, dict):
                 custom_req_entry.update(req_value)
             elif req_value is not None:
@@ -516,14 +521,14 @@ def _inject_custom_reqs_into_item(item: dict, custom_reqs: Any) -> None:
                     f"{req_value!r}; only the 'class' key will be emitted in the "
                     "serialised output."
                 )
-            item['requirements'].append(custom_req_entry)
+            item["requirements"].append(custom_req_entry)
 
 
 def dump_cwl_with_custom_requirements(
     process: Process | List[Process],
     stream: TextIO,
     custom_requirements_cache: Optional[Mapping[str, Any]] = None,
-    original_namespaces: Optional[Mapping[str, Any]] = None
+    original_namespaces: Optional[Mapping[str, Any]] = None,
 ):
     """
     Serializes a CWL document with custom requirements properly reinjected into the requirements section.
@@ -548,41 +553,42 @@ def dump_cwl_with_custom_requirements(
         original_namespaces = _original_namespaces
 
     data = save(
-        val=process, # type: ignore
-        relative_uris=False
+        val=process,  # type: ignore
+        relative_uris=False,
     )
 
-    if '__root__' in original_namespaces:
-        data['$namespaces'] = original_namespaces['__root__']
+    if "__root__" in original_namespaces:
+        data["$namespaces"] = original_namespaces["__root__"]
         logger.debug(f"Restored original $namespaces: {data['$namespaces']}")
 
-    if '$graph' in data and isinstance(data['$graph'], list):
-        for item in data['$graph']:
+    if "$graph" in data and isinstance(data["$graph"], list):
+        for item in data["$graph"]:
             if isinstance(item, dict):
-                item_id = item.get('id')
+                item_id = item.get("id")
 
-                if 'cwlVersion' in item:
-                    del item['cwlVersion']
-                if '$namespaces' in item:
-                    del item['$namespaces']
+                if "cwlVersion" in item:
+                    del item["cwlVersion"]
+                if "$namespaces" in item:
+                    del item["$namespaces"]
 
                 custom_reqs = _lookup_in_cache(item_id, custom_requirements_cache)
                 if custom_reqs is not None:
                     _inject_custom_reqs_into_item(item, custom_reqs)
     else:
         # Single top-level process (no $graph wrapper).
-        item_id = data.get('id') if isinstance(data, dict) else None
+        item_id = data.get("id") if isinstance(data, dict) else None
         custom_reqs = _lookup_in_cache(item_id, custom_requirements_cache)
         if custom_reqs is None:
             # Fallback: top-level processes without an id were cached under '__top__'.
-            custom_reqs = custom_requirements_cache.get('__top__')
+            custom_reqs = custom_requirements_cache.get("__top__")
         if custom_reqs is not None and isinstance(data, dict):
             _inject_custom_reqs_into_item(data, custom_reqs)
 
     _yaml.dump(data=data, stream=stream)
 
+
 def extract_dask_config(
-    custom_requirements_cache: Optional[Mapping[str, Any]] = None
+    custom_requirements_cache: Optional[Mapping[str, Any]] = None,
 ) -> Mapping[str, Any]:
     """
     Extracts Dask Gateway configuration from custom requirements cache.
@@ -606,16 +612,16 @@ def extract_dask_config(
     for item_id, reqs in custom_requirements_cache.items():
         if isinstance(reqs, dict):
             for req_name, req_value in reqs.items():
-                if 'DaskGatewayRequirement' in req_name:
+                if "DaskGatewayRequirement" in req_name:
                     logger.debug(f"Found DaskGatewayRequirement in {item_id}")
                     return dict(req_value) if isinstance(req_value, dict) else {}
         elif isinstance(reqs, list):
             for req in reqs:
                 if isinstance(req, dict):
-                    req_class = req.get('class', '')
-                    if 'DaskGatewayRequirement' in req_class:
+                    req_class = req.get("class", "")
+                    if "DaskGatewayRequirement" in req_class:
                         logger.debug(f"Found DaskGatewayRequirement in {item_id}")
-                        return {k: v for k, v in req.items() if k != 'class'}
+                        return {k: v for k, v in req.items() if k != "class"}
 
     logger.debug("No DaskGatewayRequirement found in custom requirements cache")
     return {}

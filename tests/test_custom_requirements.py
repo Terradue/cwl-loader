@@ -142,7 +142,11 @@ class TestCustomRequirements(TestCase):
 
     def test_graph_dump_roundtrip_reinjects_custom_req(self):
         tool_item = next(
-            (item for item in self._graph_data["$graph"] if item.get("class") == "CommandLineTool"),
+            (
+                item
+                for item in self._graph_data["$graph"]
+                if item.get("class") == "CommandLineTool"
+            ),
             None,
         )
         self.assertIsNotNone(tool_item)
@@ -169,7 +173,11 @@ class TestCustomRequirements(TestCase):
 
     def test_extract_dask_config_with_explicit_cache(self):
         explicit_cache = {
-            "my-tool": {"calrissian:DaskGatewayRequirement": {"gateway_url": "http://explicit.example.com"}}
+            "my-tool": {
+                "calrissian:DaskGatewayRequirement": {
+                    "gateway_url": "http://explicit.example.com"
+                }
+            }
         }
         config = extract_dask_config(custom_requirements_cache=explicit_cache)
         self.assertEqual("http://explicit.example.com", config.get("gateway_url"))
