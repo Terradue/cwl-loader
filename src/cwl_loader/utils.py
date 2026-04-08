@@ -96,7 +96,8 @@ def remove_refs(process: Process | List[Process]):
                 step.run = step.run[step.run.rfind("#") :]
 
             if getattr(step, "scatter", None):
-                step.scatter = _clean_values(step.scatter, f"#{process.id}/")
+                cleaned_scatter = _clean_values(step.scatter, f"#{process.id}/")
+                step.scatter = _clean_values(cleaned_scatter, f"{step.id}/")
 
         if process.extension_fields and ORIGINAL_CWLVERSION in process.extension_fields:
             process.extension_fields.pop(ORIGINAL_CWLVERSION)
