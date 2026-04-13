@@ -31,7 +31,7 @@ classifiers = [
 dependencies = [
   "cwl-utils==0.41",
   "cwltool==3.1.20260315121657",
-  "ruamel.yaml >= 0.17.6, < 0.20", # cwl-utils 0.41 depends on ruamel.yaml<0.20 and >=0.17.6
+  "ruamel.yaml >= 0.19.1, < 0.20", # cwl-utils 0.41 depends on ruamel.yaml<0.20 and >=0.17.6
   "loguru==0.7.3"
 ]
 
