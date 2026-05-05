@@ -37,7 +37,7 @@ tasks:
     - |
       set -euo pipefail
 
-      mapfile -t tool_files < <(rg -l '^[[:space:]]*class:[[:space:]]*CommandLineTool[[:space:]]*$' "{{.CWL_DIR}}"/*.cwl)
+      mapfile -t tool_files < <(rg -l '^[[:space:]]*-?[[:space:]]*class:[[:space:]]*CommandLineTool[[:space:]]*$' "{{.CWL_DIR}}"/*.cwl)
 
       if [ "${#tool_files[@]}" -eq 0 ]; then
         echo "No CommandLineTool CWL files found in {{.CWL_DIR}}"
