@@ -78,8 +78,21 @@ extra_javascript:
   - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
 
 nav:
-  - index.md
-  - API doc: api/latest/cwl_loader.md
-  - Examples: examples.ipynb
+  - Home: index.md
+  - Tutorials:
+    - Overview: tutorials/index.md
+    - First steps: tutorials/first-steps.md
+    - Notebook examples: examples.ipynb
+  - How-to guides:
+    - Overview: how-to/index.md
+    - Load and serialize CWL: how-to/load-and-dump.md
+    - Bundle a workflow: how-to/bundle-a-workflow.md
+  - Reference:
+    - Overview: reference/index.md
+    - CLI: reference/cli.md
+    - API: api/latest/cwl_loader.md
+  - Explanation:
+    - Overview: explanation/index.md
+    - Loading model: explanation/loading-model.md
 
 copyright: <a href="https://www.apache.org/licenses/LICENSE-2.0"><img src="https://img.shields.io/badge/license-Apache%20License%202.0-blue"" alt="Apache License, Version 2.0" /></a>
