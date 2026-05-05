@@ -22,3 +22,34 @@ tasks:
   default:
     cmds:
     - task: quality:test
+
+  publish:cwl-oci:
+    desc: Publish CommandLineTool CWL files as OCI artifacts to GHCR
+    vars:
+      GHCR_OWNER: '{{.GHCR_OWNER | default "Terradue"}}'
+      GHCR_REPO: '{{.GHCR_REPO | default "cwl-loader"}}'
+      CWL_OCI_TAG: '{{.CWL_OCI_TAG | default "latest"}}'
+      CWL_DIR: '{{.CWL_DIR | default "tests/data"}}'
+    preconditions:
+    - sh: command -v oras >/dev/null 2>&1
+      msg: oras CLI is required (https://oras.land/)
+    cmds:
+    - |
+      set -euo pipefail
+
+      mapfile -t tool_files < <(rg -l '^[[:space:]]*class:[[:space:]]*CommandLineTool[[:space:]]*$' "{{.CWL_DIR}}"/*.cwl)
+
+      if [ "${#tool_files[@]}" -eq 0 ]; then
+        echo "No CommandLineTool CWL files found in {{.CWL_DIR}}"
+        exit 1
+      fi
+
+      for file in "${tool_files[@]}"; do
+        name="$(basename "${file}" .cwl)"
+        ref="ghcr.io/{{.GHCR_OWNER}}/{{.GHCR_REPO}}/cwl/${name}:{{.CWL_OCI_TAG}}"
+
+        echo "Publishing ${file} -> ${ref}"
+        oras push "${ref}" \
+          --artifact-type application/vnd.commonworkflowlanguage.commandlinetool.v1+yaml \
+          "${file}:application/cwl"
+      done
