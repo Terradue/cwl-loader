@@ -1,5 +1,8 @@
 # cwl-loader
 
+[![PyPI - Version](https://img.shields.io/pypi/v/cwl-loader.svg)](https://pypi.org/project/cwl-loader)
+[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/cwl-loader.svg)](https://pypi.org/project/cwl-loader)
+
 `cwl-loader` provides utilities to load CWL documents (local files, URLs, streams, or strings) into [cwl-utils](https://github.com/common-workflow-language/cwl-utils) object models, normalize references, and sort dependency graphs.
 
 ## Installation
