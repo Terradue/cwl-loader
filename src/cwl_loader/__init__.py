@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .utils import assert_connected_graph, remove_refs
+from .utils import assert_connected_graph, contains_process, remove_refs
 from .sort import order_graph_by_dependencies
 from collections import OrderedDict
 from cwl_utils.parser import load_document_by_yaml, save
@@ -38,15 +38,17 @@ _yaml = YAML()
 _global_loader = default_loader()
 
 
-def _is_url(path_or_url: str) -> bool:
+def _is_url(path_or_url: str, session: requests.Session) -> bool:
     try:
         result = urlparse(path_or_url)
-        return all([result.scheme in ("http", "https"), result.netloc])
+        return all([f"{result.scheme}://" in session.adapters.keys(), result.netloc])
     except Exception:
         return False
 
 
-def _dereference_steps(process: Process | List[Process], uri: str) -> List[Process]:
+def _dereference_steps(
+    process: Process | List[Process], uri: str, session: requests.Session
+) -> List[Process]:
     def _on_process(p: Process, accumulator: List[Process]):
         for step in getattr(p, "steps", []):
             logger.debug(f"Checking if {step.run} must be externally imported...")
@@ -56,12 +58,17 @@ def _dereference_steps(process: Process | List[Process], uri: str) -> List[Proce
             logger.debug(f"run_url: {run_url} - uri: {uri}")
 
             if run_url and not uri == run_url:
-                referenced = load_cwl_from_location(run_url)
+                referenced = load_cwl_from_location(path=run_url, session=session)
 
                 if isinstance(referenced, list):
                     accumulator += referenced
 
                     if fragment:
+                        if not contains_process(fragment, referenced):
+                            raise Exception(
+                                f"Step {step.id} in {p.id} declares an illegal run {step.run} where {fragment} ID does not exist, only {list(map(lambda p: p.id, referenced)) if isinstance(referenced, list) else [referenced.id]} available."
+                            )
+
                         step.run = f"#{fragment}"
                     elif 1 == len(referenced):
                         step.run = f"#{referenced[0].id}"
@@ -89,6 +96,7 @@ def load_cwl_from_yaml(
     uri: str = __DEFAULT_BASE_URI__,
     cwl_version: str = __TARGET_CWL_VERSION__,
     sort: bool = True,
+    session: requests.Session = requests.Session(),
 ) -> Process | List[Process]:
     """
     Loads a CWL document from a raw dictionary.
@@ -138,7 +146,7 @@ def load_cwl_from_yaml(
 
     logger.debug("Dereferencing the steps[].run...")
 
-    dereferenced_process = _dereference_steps(process=process, uri=uri)
+    dereferenced_process = _dereference_steps(process=process, uri=uri, session=session)
 
     logger.debug("steps[].run successfully dereferenced! Dereferencing the FQNs...")
 
@@ -169,6 +177,7 @@ def load_cwl_from_stream(
     uri: str = __DEFAULT_BASE_URI__,
     cwl_version: str = __TARGET_CWL_VERSION__,
     sort: bool = True,
+    session: requests.Session = requests.Session(),
 ) -> Process | List[Process]:
     """
     Loads a CWL document from a stream of data.
@@ -188,12 +197,19 @@ def load_cwl_from_stream(
     )
 
     return load_cwl_from_yaml(
-        raw_process=cwl_content, uri=uri, cwl_version=cwl_version, sort=sort
+        raw_process=cwl_content,
+        uri=uri,
+        cwl_version=cwl_version,
+        sort=sort,
+        session=session,
     )
 
 
 def load_cwl_from_location(
-    path: str, cwl_version: str = __TARGET_CWL_VERSION__, sort: bool = True
+    path: str,
+    cwl_version: str = __TARGET_CWL_VERSION__,
+    sort: bool = True,
+    session: requests.Session = requests.Session(),
 ) -> Process | List[Process]:
     """
     Loads a CWL document from a URL or a file on the local File System, automatically detected.
@@ -212,15 +228,19 @@ def load_cwl_from_location(
         logger.debug(f"Reading stream from {path}...")
 
         loaded = load_cwl_from_stream(
-            content=stream, uri=path, cwl_version=cwl_version, sort=sort
+            content=stream,
+            uri=path,
+            cwl_version=cwl_version,
+            sort=sort,
+            session=session,
         )
 
         logger.debug(f"Stream from {path} successfully load!")
 
         return loaded
 
-    if _is_url(path):
-        response = requests.get(path, stream=True)
+    if _is_url(path, session):
+        response = session.get(path, stream=True)
         response.raise_for_status()
 
         # Read first 2 bytes to check for gzip
