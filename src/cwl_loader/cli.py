@@ -113,4 +113,4 @@ def bundle(
 
 
 for command in [bundle]:
-    _track(command.callback)
+    command.callback = _track(command.callback)
