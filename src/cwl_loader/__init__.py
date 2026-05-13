@@ -14,6 +14,7 @@
 
 from .utils import assert_connected_graph, remove_refs, to_index
 from .sort import order_graph_by_dependencies
+from collections.abc import MutableMapping as MutableMappingABC
 from collections import OrderedDict
 from cwl_utils.parser import load_document_by_yaml, save
 from cwl_utils.parser import Process, Workflow
@@ -33,9 +34,129 @@ __DEFAULT_BASE_URI__ = "io://"
 __TARGET_CWL_VERSION__ = "v1.2"
 __DEFAULT_ENCODING__ = "utf-8"
 __CWL_VERSION__ = "cwlVersion"
+__CWL_GRAPH__ = "$graph"
+__CWL_DOCUMENT_METADATA_ATTR__ = "_cwl_loader_document_metadata"
+__CWL_DOCUMENT_HAS_GRAPH_ATTR__ = "_cwl_loader_document_has_graph"
+__CWL_DOCUMENT_CONTROL_FIELDS__ = ("$namespaces", "$schemas", "$base")
 
 _yaml = YAML()
 _global_loader = default_loader()
+
+
+def _as_process_list(process: Process | List[Process]) -> List[Process]:
+    return process if isinstance(process, list) else [process]
+
+
+def _extract_document_metadata(
+    raw_process: Mapping[str, Any] | CommentedMap,
+) -> CommentedMap:
+    metadata = CommentedMap()
+
+    if __CWL_GRAPH__ not in raw_process:
+        return metadata
+
+    for key, value in raw_process.items():
+        if key not in (__CWL_VERSION__, __CWL_GRAPH__):
+            metadata[key] = value
+
+    return metadata
+
+
+def _preserve_document_metadata(
+    process: Process | List[Process],
+    document_metadata: CommentedMap,
+    document_has_graph: bool,
+):
+    if not document_metadata:
+        return
+
+    for p in _as_process_list(process):
+        metadata = CommentedMap(document_metadata)
+        setattr(p, __CWL_DOCUMENT_METADATA_ATTR__, metadata)
+        setattr(p, __CWL_DOCUMENT_HAS_GRAPH_ATTR__, document_has_graph)
+
+        loading_options = getattr(p, "loadingOptions", None)
+        if loading_options is not None:
+            loading_options.addl_metadata.update(metadata)
+
+
+def _preserved_document_metadata(
+    process: Process | List[Process],
+) -> Mapping[str, Any] | None:
+    for p in _as_process_list(process):
+        metadata = getattr(p, __CWL_DOCUMENT_METADATA_ATTR__, None)
+        if metadata:
+            return metadata
+
+        loading_options = getattr(p, "loadingOptions", None)
+        metadata = getattr(loading_options, "addl_metadata", None)
+        if metadata:
+            return metadata
+
+    return None
+
+
+def _has_preserved_graph_document(process: Process | List[Process]) -> bool:
+    return any(
+        bool(getattr(p, __CWL_DOCUMENT_HAS_GRAPH_ATTR__, False))
+        for p in _as_process_list(process)
+    )
+
+
+def _strip_nested_document_controls(
+    data: MutableMappingABC[str, Any], document_metadata: Mapping[str, Any]
+):
+    graph = data.get(__CWL_GRAPH__)
+
+    if not isinstance(graph, list):
+        return
+
+    for item in graph:
+        if not isinstance(item, MutableMappingABC):
+            continue
+
+        for field in __CWL_DOCUMENT_CONTROL_FIELDS__:
+            if field in document_metadata:
+                item.pop(field, None)
+
+
+def _restore_document_metadata(data: Any, process: Process | List[Process]) -> Any:
+    document_metadata = _preserved_document_metadata(process)
+
+    if not document_metadata or not isinstance(data, MutableMappingABC):
+        return data
+
+    restored = CommentedMap()
+
+    if _has_preserved_graph_document(process) and __CWL_GRAPH__ not in data:
+        graph_item = CommentedMap()
+        for key, value in data.items():
+            if key != __CWL_VERSION__:
+                graph_item[key] = value
+
+        if __CWL_VERSION__ in data:
+            restored[__CWL_VERSION__] = data[__CWL_VERSION__]
+
+        restored[__CWL_GRAPH__] = [graph_item]
+    else:
+        for key, value in data.items():
+            restored[key] = value
+
+    _strip_nested_document_controls(restored, document_metadata)
+
+    result = CommentedMap()
+    if __CWL_VERSION__ in restored:
+        result[__CWL_VERSION__] = restored[__CWL_VERSION__]
+
+    for key, value in document_metadata.items():
+        if key not in (__CWL_VERSION__, __CWL_GRAPH__) and key not in result:
+            result[key] = value
+
+    for key, value in restored.items():
+        if key not in result:
+            result[key] = value
+
+    return result
 
 
 def _is_url(path_or_url: str, session: requests.Session) -> bool:
@@ -125,6 +246,8 @@ def load_cwl_from_yaml(
         `Processes`: The parsed CWL Process or Processes (if the CWL document is a `$graph`).
     """
     updated_process = raw_process
+    document_metadata = _extract_document_metadata(raw_process)
+    document_has_graph = __CWL_GRAPH__ in raw_process
 
     if cwl_version != raw_process[__CWL_VERSION__]:
         logger.debug(
@@ -179,6 +302,12 @@ def load_cwl_from_yaml(
         logger.debug("Sorting Process instances by dependencies....")
         dereferenced_process = order_graph_by_dependencies(dereferenced_process)
         logger.debug("Sorting process is over.")
+
+    _preserve_document_metadata(
+        process=dereferenced_process,
+        document_metadata=document_metadata,
+        document_has_graph=document_has_graph,
+    )
 
     return (
         dereferenced_process
@@ -315,5 +444,6 @@ def dump_cwl(process: Process | List[Process], stream: TextIO):
         val=process,  # type: ignore
         relative_uris=False,
     )
+    data = _restore_document_metadata(data=data, process=process)
 
     _yaml.dump(data=data, stream=stream)
