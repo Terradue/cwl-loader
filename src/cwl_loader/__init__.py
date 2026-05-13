@@ -12,11 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .utils import assert_connected_graph, contains_process, remove_refs
+from .utils import assert_connected_graph, remove_refs, to_index
 from .sort import order_graph_by_dependencies
 from collections import OrderedDict
 from cwl_utils.parser import load_document_by_yaml, save
-from cwl_utils.parser import Process
+from cwl_utils.parser import Process, Workflow
 from cwltool.load_tool import default_loader
 from cwltool.update import update
 from gzip import GzipFile
@@ -58,27 +58,42 @@ def _dereference_steps(
             logger.debug(f"run_url: {run_url} - uri: {uri}")
 
             if run_url and not uri == run_url:
-                referenced = load_cwl_from_location(path=run_url, session=session)
+                referenced: Process | List[Process] = load_cwl_from_location(
+                    path=run_url, session=session
+                )
 
                 if isinstance(referenced, list):
-                    accumulator += referenced
+                    referenced_index: Mapping[str, Process] = to_index(referenced)
+                else:
+                    referenced_index: Mapping[str, Process] = {}
 
-                    if fragment:
-                        if not contains_process(fragment, referenced):
-                            raise Exception(
-                                f"Step {step.id} in {p.id} declares an illegal run {step.run} where {fragment} ID does not exist, only {list(map(lambda p: p.id, referenced)) if isinstance(referenced, list) else [referenced.id]} available."
-                            )
+                if fragment:
+                    if fragment not in referenced_index:
+                        raise Exception(
+                            f"Step {step.id} in {p.id} declares an illegal run {step.run} where {fragment} ID does not exist, only {list(map(lambda p: p.id, referenced)) if isinstance(referenced, list) else [referenced.id]} available."
+                        )
 
-                        step.run = f"#{fragment}"
-                    elif 1 == len(referenced):
-                        step.run = f"#{referenced[0].id}"
+                    referenced = referenced_index[fragment]
+
+                def _append_process(current: Process):
+                    accumulator.append(current)
+                    step.run = f"#{current.id}"
+
+                if isinstance(referenced, list):
+                    if 1 == len(referenced):
+                        _append_process(referenced[0])
                     else:
                         raise ValueError(
                             f"No entry point provided for $graph referenced by {step.run}"
                         )
                 else:
-                    accumulator.append(referenced)
-                    step.run = f"#{referenced.id}"
+                    _append_process(referenced)
+
+                    if isinstance(referenced, Workflow):
+                        for inner_step in getattr(referenced, "steps", []):
+                            accumulator.append(
+                                referenced_index[inner_step.run.split("#")[-1]]
+                            )
 
     result: List[Process] = process if isinstance(process, list) else [process]
 
