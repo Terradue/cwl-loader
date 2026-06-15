@@ -34,7 +34,7 @@ dependencies = [
   "ruamel.yaml >= 0.17.6, < 0.20", # cwl-utils 0.41 depends on ruamel.yaml<0.20 and >=0.17.6
   "loguru==0.7.3",
   "session-adapters==0.3.0",
-  "click==8.3.3"
+  "click==8.4.1"
 ]
 
 [project.scripts]
