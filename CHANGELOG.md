@@ -11,6 +11,12 @@ local release tag.
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-06-15
+
+### Changed
+
+- click dependency upgraded to v8.4.1
+
 ## [0.19.0] - 2026-05-13
 
 ### Fixed
@@ -96,7 +102,8 @@ local release tag.
 - Fix the `dump_cwl` method signature and documentation/notebook build issues.
 - Correct project naming, license content, formatting, tests, and CI setup.
 
-[Unreleased]: https://github.com/Terradue/cwl-loader/compare/v0.19.0...HEAD
+[Unreleased]: https://github.com/Terradue/cwl-loader/compare/v0.20.0...HEAD
+[0.19.0]: https://github.com/Terradue/cwl-loader/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/Terradue/cwl-loader/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/Terradue/cwl-loader/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/Terradue/cwl-loader/compare/v0.16.0...v0.17.0
