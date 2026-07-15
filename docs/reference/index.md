@@ -1,9 +1,10 @@
 # Reference
 
-Reference pages describe the CLI and Python API as they are.
+Reference pages describe the Python API and point command-line users to the new
+home of the bundling tool.
 
-- [CLI reference](cli.md)
+- [Command-line interface migration](cli.md)
 - [API reference](../api/latest/cwl_loader.md)
 
-Use this section when you need exact option names, environment variables,
-function signatures, parameters, and return values.
+Use this section when you need function signatures, parameters, and return
+values.

@@ -18,7 +18,7 @@ The documentation is organized according to the
 | --- | --- | --- |
 | Learn by following a guided path | Tutorials | [First steps with CWL Loader](tutorials/first-steps.md) |
 | Solve a specific task | How-to guides | [Load and serialize CWL](how-to/load-and-dump.md) |
-| Look up exact commands and APIs | Reference | [CLI reference](reference/cli.md) |
+| Look up the Python API | Reference | [API reference](api/latest/cwl_loader.md) |
 | Understand concepts and design choices | Explanation | [The loading model](explanation/loading-model.md) |
 
 ## What CWL Loader does
@@ -28,5 +28,10 @@ Python mappings. It can update older CWL documents to `v1.2`, parse them with
 `cwl-utils`, dereference external `steps[].run` imports, validate that workflow
 steps point to available processes, and write the resolved document as YAML.
 
-Use the Python API when embedding this behavior in an application. Use the
-`cwl-loader bundle` command when you want a resolved CWL file from the shell.
+Use the Python API when embedding this behavior in an application.
+
+!!! important "The bundle CLI has moved"
+
+    The `cwl-loader bundle` command is no longer part of CWL Loader. For
+    command-line bundling, use
+    [Transpiler Mate](https://terradue.github.io/transpiler-mate/).

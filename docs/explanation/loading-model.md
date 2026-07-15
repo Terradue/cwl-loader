@@ -12,7 +12,7 @@ references, and writes CWL back to YAML. A workflow runner is still responsible
 for executing the resulting workflow.
 
 This separation is useful when you need to inspect, normalize, validate, or
-bundle CWL before passing it to another system.
+resolve CWL before passing it to another system.
 
 ## What resolution means
 
@@ -33,14 +33,9 @@ dependency order.
 `load_cwl_from_location()` accepts local filesystem paths and URLs supported by
 the configured `requests.Session`.
 
-The CLI configures a session with adapters for:
-
-- `file://`
-- `s3://`
-- `oci://`
-
-HTTP and HTTPS use the default Requests adapters. URL responses that start with
-the gzip magic bytes are decompressed before YAML parsing.
+Applications can configure the request session with adapters for additional URL
+schemes. HTTP and HTTPS use the default Requests adapters. URL responses that
+start with the gzip magic bytes are decompressed before YAML parsing.
 
 ## CWL version normalization
 
@@ -52,9 +47,12 @@ This makes older documents easier to consume through one object model, but it
 also means the serialized output can differ from the input even when the input
 was already valid CWL.
 
-## CLI or Python API
+## Python API and command-line bundling
 
 Use the Python API when a program needs access to the parsed `Process` objects or
 when you need to supply a custom request session.
 
-Use `cwl-loader bundle` when the desired result is a resolved YAML file on disk.
+The former `cwl-loader bundle` command has moved to
+[Transpiler Mate](https://terradue.github.io/transpiler-mate/). Use Transpiler
+Mate when the desired result is a resolved YAML file produced from the command
+line.

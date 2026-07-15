@@ -5,5 +5,5 @@ way it does.
 
 - [The loading model](loading-model.md)
 
-Use this section when you want context before changing an integration or
-deciding whether to use the Python API or the CLI.
+Use this section when you want context before changing a Python integration or
+deciding between the CWL Loader API and Transpiler Mate's command-line tooling.
