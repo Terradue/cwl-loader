@@ -5,6 +5,11 @@
 
 `cwl-loader` provides utilities to load CWL documents (local files, URLs, streams, or strings) into [cwl-utils](https://github.com/common-workflow-language/cwl-utils) object models, normalize references, and sort dependency graphs.
 
+> [!IMPORTANT]
+> The `cwl-loader bundle` CLI has moved to
+> [Transpiler Mate](https://terradue.github.io/transpiler-mate/). This package
+> continues to provide the Python API for loading and serializing CWL documents.
+
 ## Installation
 
 ```bash

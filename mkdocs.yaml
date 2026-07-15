@@ -86,10 +86,10 @@ nav:
   - How-to guides:
     - Overview: how-to/index.md
     - Load and serialize CWL: how-to/load-and-dump.md
-    - Bundle a workflow: how-to/bundle-a-workflow.md
+    - Bundle with Transpiler Mate: how-to/bundle-a-workflow.md
   - Reference:
     - Overview: reference/index.md
-    - CLI: reference/cli.md
+    - CLI migration: reference/cli.md
     - API: api/latest/cwl_loader.md
   - Explanation:
     - Overview: explanation/index.md
