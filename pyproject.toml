@@ -36,7 +36,7 @@ dependencies = [
 ]
 
 [project.urls]
-Documentation = "https://github.com/eoap/cwl-loader#readme"
+Documentation = "https://terradue.github.io/cwl-loader/"
 Issues = "https://github.com/eoap/cwl-loader/issues"
 Source = "https://github.com/eoap/cwl-loader"
 
