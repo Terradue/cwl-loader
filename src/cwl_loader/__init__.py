@@ -12,7 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .utils import contains_process, assert_connected_graph, get_ids, remove_refs, to_index
+from .utils import (
+    contains_process,
+    assert_connected_graph,
+    get_ids,
+    remove_refs,
+    to_index,
+)
 from .sort import order_graph_by_dependencies
 from collections.abc import MutableMapping as MutableMappingABC
 from collections import OrderedDict
