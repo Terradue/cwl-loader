@@ -23,7 +23,13 @@ local release tag.
 
 ### Security
 
-## [0.21.0] - 2025-07-15
+## [0.22.0] - 2026-07-17
+
+### Fixed
+
+- Prevent inconsistent CWLs loading by detecting multiple `Workflow`/`CommandLineTool` from multiple imported sources have the same `id`. 
+
+## [0.21.0] - 2026-07-15
 
 ### Changed
 

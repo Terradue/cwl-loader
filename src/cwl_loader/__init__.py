@@ -12,7 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .utils import assert_connected_graph, remove_refs, to_index
+from .utils import (
+    contains_process,
+    assert_connected_graph,
+    get_ids,
+    remove_refs,
+    to_index,
+)
 from .sort import order_graph_by_dependencies
 from collections.abc import MutableMapping as MutableMappingABC
 from collections import OrderedDict
@@ -191,12 +197,17 @@ def _dereference_steps(
                 if fragment:
                     if fragment not in referenced_index:
                         raise Exception(
-                            f"Step {step.id} in {p.id} declares an illegal run {step.run} where {fragment} ID does not exist, only {list(map(lambda p: p.id, referenced)) if isinstance(referenced, list) else [referenced.id]} available."
+                            f"Step {step.id} in {p.id} declares an illegal run {step.run} where {fragment} ID does not exist, only {get_ids(referenced)} available."
                         )
 
                     referenced = referenced_index[fragment]
 
                 def _append_process(current: Process):
+                    if contains_process(current.id, process):
+                        raise Exception(
+                            f"Cannot import {current.class_} {current.id} declared in {run_url}, 'id' already present in embedding CWL document"
+                        )
+
                     accumulator.append(current)
                     step.run = f"#{current.id}"
 
