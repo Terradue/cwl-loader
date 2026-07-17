@@ -45,10 +45,18 @@ def contains_process(process_id: str, process: Process | List[Process]) -> bool:
     return search_process(process_id=process_id, process=process) is not None
 
 
+def get_ids(process: Process | List[Process]) -> List[str]:
+    return (
+        list(map(lambda p: p.id, process))
+        if isinstance(process, list)
+        else [process.id]
+    )
+
+
 def assert_process_contained(process_id: str, process: Process | List[Process]):
     if not contains_process(process_id=process_id, process=process):
         raise ValueError(
-            f"Process {process_id} does not exist in input CWL document, only {list(map(lambda p: p.id, process)) if isinstance(process, list) else [process.id]} available."
+            f"Process {process_id} does not exist in input CWL document, only {get_ids(process)} available."
         )
 
 
