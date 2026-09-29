@@ -12,35 +12,32 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This workflow will install Python dependencies, run tests and lint with a single version of Python
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python
-
 name: docs
+permissions:
+  contents: write
+
 on:
   push:
     branches:
-      - docs
-      - develop
-      - main
+    - develop
+    - main
+    - master
     paths:
-      # Only rebuild website when docs have changed
-      - 'README.md'
-      - 'docs/**'
-      - 'mkdocs.yaml'
-      - .github/**
+    # Only rebuild website when docs have changed
+    - README.md
+    - docs/**
+    - mkdocs.yaml
+    - .github/**
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout master
-        uses: actions/checkout@v6
-
-      - name: Set up Python 3.x
-        uses: actions/setup-python@v7
-        with:
-          python-version: 3.x
-      - run: pip install mkdocs-material mkdocs-mermaid2-plugin mkdocs-jupyter legacy-cgi pdocs
-      - run: pip install .
-      - run: pdocs as_markdown --output_dir ./docs/api/latest --exclude_source --overwrite cwl_loader
-      - run: mkdocs gh-deploy --force
+    - name: Checkout master
+      uses: actions/checkout@v7.0.1
+    - name: Set up Python 3.x
+      uses: actions/setup-python@v7.0.0
+      with:
+        python-version: 3.x
+    - run: pip install "mkdocs<=2.0.0" mkdocs-material mkdocs-mermaid2-plugin mkdocs-jupyter legacy-cgi mkdocstrings[python] mkdocs-build-plantuml-plugin
+    - run: mkdocs gh-deploy --force

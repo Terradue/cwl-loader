@@ -11,10 +11,10 @@ from cwl_loader import dump_cwl, load_cwl_from_yaml
 
 
 class MetadataPreservationTests(TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         self.yaml = YAML()
 
-    def test_graph_document_metadata_is_dumped_at_document_level(self):
+    def test_graph_document_metadata_is_dumped_at_document_level(self) -> None:
         raw_process = {
             "cwlVersion": "v1.2",
             "$namespaces": {"s": "https://schema.org/"},
@@ -47,7 +47,7 @@ class MetadataPreservationTests(TestCase):
 
         process = load_cwl_from_yaml(raw_process, sort=False)
 
-        self.assertIsInstance(process, list)
+        assert isinstance(process, list)
         self.assertEqual(
             {"owner": "team"},
             process[0].loadingOptions.addl_metadata["metadata"],
@@ -66,12 +66,11 @@ class MetadataPreservationTests(TestCase):
         self.assertNotIn("$namespaces", dumped["$graph"][0])
         self.assertTrue(
             any(
-                item.get("https://schema.org/softwareVersion") == "2.0"
-                for item in dumped["$graph"]
+                item.get("https://schema.org/softwareVersion") == "2.0" for item in dumped["$graph"]
             )
         )
 
-    def test_single_item_graph_metadata_keeps_graph_envelope_on_dump(self):
+    def test_single_item_graph_metadata_keeps_graph_envelope_on_dump(self) -> None:
         raw_process = {
             "cwlVersion": "v1.2",
             "metadata": {"owner": "team"},
@@ -97,7 +96,7 @@ class MetadataPreservationTests(TestCase):
         self.assertIn("$graph", dumped)
         self.assertEqual("tool", dumped["$graph"][0]["id"])
 
-    def test_single_process_document_metadata_is_preserved(self):
+    def test_single_process_document_metadata_is_preserved(self) -> None:
         raw_process = {
             "cwlVersion": "v1.2",
             "$namespaces": {"s": "https://schema.org/"},
@@ -112,10 +111,9 @@ class MetadataPreservationTests(TestCase):
         }
 
         process = load_cwl_from_yaml(raw_process, sort=False)
+        assert not isinstance(process, list)
 
-        self.assertEqual(
-            "1.0", process.loadingOptions.addl_metadata["s:softwareVersion"]
-        )
+        self.assertEqual("1.0", process.loadingOptions.addl_metadata["s:softwareVersion"])
         self.assertEqual(
             {"s": "https://schema.org/"},
             process.loadingOptions.addl_metadata["$namespaces"],
@@ -133,7 +131,7 @@ class MetadataPreservationTests(TestCase):
         self.assertEqual({"s": "https://schema.org/"}, dumped["$namespaces"])
         self.assertEqual(["https://example.com/schema"], dumped["$schemas"])
 
-    def test_v1_1_document_is_upgraded_without_mutating_input(self):
+    def test_v1_1_document_is_upgraded_without_mutating_input(self) -> None:
         raw_process = {
             "cwlVersion": "v1.1",
             "class": "CommandLineTool",

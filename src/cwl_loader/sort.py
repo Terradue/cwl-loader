@@ -12,69 +12,74 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This workflow will install Python dependencies, run tests and lint with a single version of Python
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python
+"""Order CWL graphs and workflow steps by their dependencies."""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+
+from cwl_utils.parser import Workflow
 
 from .utils import to_index
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
 
-    from cwl_utils.parser import Process, Workflow
+    from cwl_utils.parser import Process
 
 # ---- Utilities --------------------------------------------------------------
 
 
 def _kahn_toposort(nodes: Iterable[str], edges: Iterable[tuple[str, str]]) -> list[str]:
-    """Return a topo-sorted list of node ids. Raises ValueError on cycles."""
+    """Order known nodes by dependency, ignoring external edges and duplicates.
+
+    Raises:
+        ValueError: If the known nodes contain a dependency cycle.
+    """
     nodes = set(nodes)
     succ: Mapping[str, set[str]] = {n: set() for n in nodes}
     pred_count: dict[str, int] = dict.fromkeys(nodes, 0)
-    for a, b in edges:
-        if a not in nodes or b not in nodes:
+    for producer, consumer in set(edges):
+        if producer not in nodes or consumer not in nodes:
             # Ignore edges to unknown nodes (e.g., external tools not in $graph)
             continue
-        if b not in succ[a]:
-            succ[a].add(b)
-            pred_count[b] += 1
+        succ[producer].add(consumer)
+        pred_count[consumer] += 1
 
-    S = [n for n in nodes if pred_count[n] == 0]
-    out: list[str] = []
-    while S:
-        n = S.pop()
-        out.append(n)
-        for m in list(succ[n]):
-            succ[n].remove(m)
-            pred_count[m] -= 1
-            if pred_count[m] == 0:
-                S.append(m)
+    ready = [node for node in nodes if pred_count[node] == 0]
+    ordered: list[str] = []
+    while ready:
+        node = ready.pop()
+        ordered.append(node)
+        for successor in succ[node]:
+            pred_count[successor] -= 1
+            if pred_count[successor] == 0:
+                ready.append(successor)
 
     if any(pred_count[n] > 0 for n in nodes):
         cyclic = [n for n in nodes if pred_count[n] > 0]
         raise ValueError(f"Cycle detected among: {cyclic}")
-    return out
+    return ordered
 
 
 # ---- Global $graph ordering -------------------------------------------------
 
 
 def order_graph_by_dependencies(processes: list[Process]) -> list[Process]:
-    """
-    Sort top-level parsed objects so that any process referenced by a Workflow step.run
-    appears before the Workflow that uses it.
+    """Return processes ordered so referenced runs precede their workflows.
+
+    Workflow steps are also sorted in place by their input dependencies.
+
+    Raises:
+        ValueError: If the process graph or workflow steps contain a cycle.
     """
     by_id: Mapping[str, Process] = to_index(processes)
 
     edges: list[tuple[str, str]] = []
     for process in processes:
         # We only add edges from step.run -> workflow.id
-        class_name = type(process).__name__
-        if class_name.endswith("Workflow") and getattr(process, "steps", None):
-            _order_workflow_steps(process)  # type: ignore
+        if isinstance(process, Workflow) and process.steps:
+            _order_workflow_steps(process)
 
             workflow_id = process.id
             for step in getattr(process, "steps", []):
@@ -96,35 +101,21 @@ def order_graph_by_dependencies(processes: list[Process]) -> list[Process]:
 # ---- Per-workflow step ordering --------------------------------------------
 
 
-def _order_workflow_steps(workflow: Workflow):
+def _order_workflow_steps(workflow: Workflow) -> None:
+    """Sort workflow steps in place so producers precede their consumers.
+
+    Raises:
+        ValueError: If workflow steps contain a dependency cycle.
     """
-    Sort steps within a Workflow so that data dependencies (in[].source) are respected.
-    """
-    by_id: Mapping[str, object] = to_index(workflow.steps)
+    by_id = to_index(workflow.steps)
     edges: list[tuple[str, str]] = []
 
-    # Add edges from producer -> consumer based on in[].source
     for step in workflow.steps:
-        # Compatible access across versions:
-        inputs = (
-            getattr(step, "in_", None)
-            or getattr(step, "inputs", None)
-            or getattr(step, "in", None)
-        )
-        if inputs:
-            for inp in inputs:
-                srcs = getattr(inp, "source", None)
-                if not srcs:
-                    continue
-                # source can be str or list[str]
-                if isinstance(srcs, str):
-                    srcs = [srcs]
-                for s in srcs:
-                    # sources are like "stepId/outputName" or "#wf/stepId/output"
-                    # Extract the stepId (token before the first '/'), ignoring external ports
-                    producer = s.split("/", 1)[0]
-                    if producer in by_id:
-                        edges.append((producer, step.id))
+        for parameter in step.in_:
+            sources = parameter.source or []
+            if isinstance(sources, str):
+                sources = [sources]
+            edges.extend((source.split("/", 1)[0], step.id) for source in sources)
 
     sorted_steps = _kahn_toposort(by_id.keys(), edges)
-    workflow.steps = [by_id[i] for i in sorted_steps if i in by_id]
+    workflow.steps = [by_id[identifier] for identifier in sorted_steps]

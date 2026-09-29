@@ -21,21 +21,19 @@ from cwl_loader import load_cwl_from_location
 
 
 class Testloading(TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         self.wf_url = "https://raw.githubusercontent.com/eoap/application-package-patterns/refs/heads/main/cwl-workflow/pattern-1.cwl"
         self.stage_in_url = "https://raw.githubusercontent.com/eoap/application-package-patterns/refs/heads/main/templates/stage-in.cwl"
 
-    def tearDown(self):
+    def tearDown(self) -> None:
         pass
 
-    def test_pattern_wrapped_cwl(self):
+    def test_pattern_wrapped_cwl(self) -> None:
         graph = load_cwl_from_location(path=self.wf_url)
         self.assertIsNotNone(graph, "Expected non null $graph, found None")
-        self.assertIsInstance(
-            graph, list, f"Expecting graph as list, found {type(graph)}"
-        )
+        self.assertIsInstance(graph, list, f"Expecting graph as list, found {type(graph)}")
 
-    def test_remote_schema_definition_import(self):
+    def test_remote_schema_definition_import(self) -> None:
         process = load_cwl_from_location(path=self.stage_in_url)
 
         self.assertIsNotNone(process)

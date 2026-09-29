@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from io import StringIO
+from typing import Any
 from unittest import TestCase
 
 from cwl_utils.parser import Process
@@ -112,8 +113,11 @@ outputs:
 
 
 class TestCustomRequirements(TestCase):
+    _graph_data: dict[str, Any]
+    _single_data: dict[str, Any]
+
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls) -> None:
         process = load_cwl_from_string_content(_GRAPH_CWL_WITH_CUSTOM_REQ)
         out = StringIO()
         dump_cwl_with_custom_requirements(process, out)
@@ -124,68 +128,64 @@ class TestCustomRequirements(TestCase):
         dump_cwl_with_custom_requirements(process, out)
         cls._single_data = _yaml.load(out.getvalue())
 
-    def test_graph_with_custom_req_parses_successfully(self):
+    def test_graph_with_custom_req_parses_successfully(self) -> None:
         result = load_cwl_from_string_content(_GRAPH_CWL_WITH_CUSTOM_REQ)
         self.assertIsNotNone(result)
         self.assertIsInstance(result, list)
+        assert isinstance(result, list)
         self.assertEqual(2, len(result))
 
-    def test_single_process_with_custom_req_parses_successfully(self):
+    def test_single_process_with_custom_req_parses_successfully(self) -> None:
         result = load_cwl_from_string_content(_SINGLE_CWL_WITH_CUSTOM_REQ)
         self.assertIsNotNone(result)
         self.assertIsInstance(result, Process)
 
-    def test_graph_dump_roundtrip_restores_namespaces(self):
+    def test_graph_dump_roundtrip_restores_namespaces(self) -> None:
         self.assertIn("$namespaces", self._graph_data)
         self.assertIn("calrissian", self._graph_data["$namespaces"])
 
-    def test_graph_dump_roundtrip_reinjects_custom_req(self):
+    def test_graph_dump_roundtrip_reinjects_custom_req(self) -> None:
         tool_item = next(
-            (
-                item
-                for item in self._graph_data["$graph"]
-                if item.get("class") == "CommandLineTool"
-            ),
+            (item for item in self._graph_data["$graph"] if item.get("class") == "CommandLineTool"),
             None,
         )
         self.assertIsNotNone(tool_item)
+        assert tool_item is not None
         reqs = tool_item.get("requirements", [])
         dask_req = [r for r in reqs if "DaskGatewayRequirement" in r.get("class", "")]
         self.assertEqual(1, len(dask_req))
 
-    def test_single_process_dump_roundtrip_reinjects_custom_req(self):
+    def test_single_process_dump_roundtrip_reinjects_custom_req(self) -> None:
         reqs = self._single_data.get("requirements", [])
         dask_req = [r for r in reqs if "DaskGatewayRequirement" in r.get("class", "")]
         self.assertEqual(1, len(dask_req))
 
-    def test_extract_dask_config_from_graph(self):
+    def test_extract_dask_config_from_graph(self) -> None:
         load_cwl_from_string_content(_GRAPH_CWL_WITH_CUSTOM_REQ)
         config = extract_dask_config()
         self.assertEqual("http://gateway.example.com", config.get("gateway_url"))
         self.assertEqual(2, config.get("worker_cores"))
         self.assertEqual("4G", config.get("worker_memory"))
 
-    def test_extract_dask_config_from_single_process(self):
+    def test_extract_dask_config_from_single_process(self) -> None:
         load_cwl_from_string_content(_SINGLE_CWL_WITH_CUSTOM_REQ)
         config = extract_dask_config()
         self.assertEqual("http://gateway.example.com", config.get("gateway_url"))
 
-    def test_extract_dask_config_with_explicit_cache(self):
+    def test_extract_dask_config_with_explicit_cache(self) -> None:
         explicit_cache = {
             "my-tool": {
-                "calrissian:DaskGatewayRequirement": {
-                    "gateway_url": "http://explicit.example.com"
-                }
+                "calrissian:DaskGatewayRequirement": {"gateway_url": "http://explicit.example.com"}
             }
         }
         config = extract_dask_config(custom_requirements_cache=explicit_cache)
         self.assertEqual("http://explicit.example.com", config.get("gateway_url"))
 
-    def test_extract_dask_config_returns_empty_when_absent(self):
+    def test_extract_dask_config_returns_empty_when_absent(self) -> None:
         config = extract_dask_config(custom_requirements_cache={})
         self.assertEqual({}, config)
 
-    def test_successive_loads_do_not_leak_cache(self):
+    def test_successive_loads_do_not_leak_cache(self) -> None:
         load_cwl_from_string_content(_SINGLE_CWL_WITH_CUSTOM_REQ)
         self.assertTrue(
             len(_custom_requirements_cache) > 0,

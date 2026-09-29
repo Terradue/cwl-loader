@@ -11,3 +11,4 @@ docs/api
 .codex
 .agents
 uv.lock
+.cache

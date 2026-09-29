@@ -18,7 +18,7 @@ The documentation is organized according to the
 | --- | --- | --- |
 | Learn by following a guided path | Tutorials | [First steps with CWL Loader](tutorials/first-steps.md) |
 | Solve a specific task | How-to guides | [Load and serialize CWL](how-to/load-and-dump.md) |
-| Look up the Python API | Reference | [API reference](api/latest/cwl_loader.md) |
+| Look up the Python API | Reference | [API reference](reference/api.md) |
 | Understand concepts and design choices | Explanation | [The loading model](explanation/loading-model.md) |
 
 ## What CWL Loader does

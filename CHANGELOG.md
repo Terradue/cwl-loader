@@ -23,6 +23,12 @@ local release tag.
 
 ### Security
 
+## [0.27.0] - 2026-09-25
+
+### Changed
+
+- Overall quality improved.
+
 ## [0.26.0] - 2026-09-21
 
 ### Fixed
@@ -181,7 +187,8 @@ local release tag.
 - Fix the `dump_cwl` method signature and documentation/notebook build issues.
 - Correct project naming, license content, formatting, tests, and CI setup.
 
-[Unreleased]: https://github.com/transpiler-mate/cwl-loader/compare/v0.26.0...HEAD
+[Unreleased]: https://github.com/transpiler-mate/cwl-loader/compare/v0.27.0...HEAD
+[0.27.0]: https://github.com/transpiler-mate/cwl-loader/compare/v0.26.0...v0.27.0
 [0.26.0]: https://github.com/transpiler-mate/cwl-loader/compare/v0.25.0...v0.26.0
 [0.25.0]: https://github.com/Terradue/cwl-loader/compare/v0.24.0...v0.25.0
 [0.24.0]: https://github.com/Terradue/cwl-loader/compare/v0.23.0...v0.24.0

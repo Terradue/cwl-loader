@@ -8,4 +8,4 @@ See the Transpiler Mate documentation for its current CLI reference,
 installation instructions, supported inputs, and configuration options.
 
 For programmatic CWL loading and serialization, continue to use the
-[CWL Loader Python API](../api/latest/cwl_loader.md).
+[CWL Loader Python API](api.md).

@@ -14,11 +14,20 @@
 
 """Regression coverage for inline DOM runs and local file URI loading."""
 
+from __future__ import annotations
+
 from io import StringIO
-from types import SimpleNamespace
+from typing import TYPE_CHECKING
 from unittest.mock import Mock
 
 import pytest
+from cwl_utils.parser.cwl_v1_2 import CommandLineTool, Workflow, WorkflowStep
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from cwl_utils.parser import Process
+
 
 from cwl_loader import dump_cwl, load_cwl_from_location, load_cwl_from_string_content
 from cwl_loader._dereference import _dereference_steps
@@ -31,7 +40,8 @@ stdout: result.txt
 """
 
 
-def workflow(run):
+def workflow(run: str) -> str:
+    """Build a workflow document with the supplied run declaration."""
     return (
         "cwlVersion: v1.2\nclass: Workflow\nid: main\n"
         "inputs: {message: string}\n"
@@ -40,21 +50,24 @@ def workflow(run):
     )
 
 
-def inline(content):
+def inline(content: str) -> str:
+    """Indent a process document for use as an inline run."""
     return "    run:\n" + "".join(f"      {line}\n" for line in content.splitlines())
 
 
-def index(result):
+def index(result: Process | list[Process]) -> dict[str, Process]:
+    """Index loaded processes by their normalized identifiers."""
     return {p.id: p for p in (result if isinstance(result, list) else [result])}
 
 
 @pytest.mark.parametrize("named", [False, True])
-def test_inline_tool(tmp_path, named):
+def test_inline_tool(tmp_path: Path, named: bool) -> None:
     text = workflow(inline(("id: tool\n" if named else "") + TOOL))
     path = tmp_path / "main.cwl"
     path.write_text(text)
     processes = index(load_cwl_from_location(str(path)))
     root = processes["main"]
+    assert isinstance(root, Workflow)
     tool_id = root.steps[0].run[1:]
     assert tool_id == ("main/echo/run/tool" if named else "main/echo/run")
     assert processes[tool_id].class_ == "CommandLineTool"
@@ -62,32 +75,32 @@ def test_inline_tool(tmp_path, named):
     assert root.outputs[0].outputSource == "echo/result"
     stream = StringIO()
     dump_cwl(list(processes.values()), stream)
-    assert set(
-        index(load_cwl_from_string_content(stream.getvalue(), uri=path.as_uri()))
-    ) == set(processes)
-
-
-def test_nested_anonymous_inline_workflow(tmp_path):
-    nested = (
-        workflow(inline(TOOL))
-        .replace("cwlVersion: v1.2\n", "")
-        .replace("id: main\n", "")
+    assert set(index(load_cwl_from_string_content(stream.getvalue(), uri=path.as_uri()))) == set(
+        processes
     )
+
+
+def test_nested_anonymous_inline_workflow(tmp_path: Path) -> None:
+    nested = workflow(inline(TOOL)).replace("cwlVersion: v1.2\n", "").replace("id: main\n", "")
     path = tmp_path / "main.cwl"
     path.write_text(workflow(inline(nested)))
     processes = index(load_cwl_from_location(path.as_uri()))
-    assert len(processes) == 3
-    inner = processes[processes["main"].steps[0].run[1:]]
+    expected_process_count = 3
+    assert len(processes) == expected_process_count
+    root = processes["main"]
+    assert isinstance(root, Workflow)
+    inner = processes[root.steps[0].run[1:]]
+    assert isinstance(inner, Workflow)
     assert inner.class_ == "Workflow"
     assert inner.steps[0].run[1:] in processes
     assert inner.steps[0].in_[0].source == "message"
     assert inner.outputs[0].outputSource == "echo/result"
 
 
-@pytest.mark.parametrize(
-    "location", ["path", "relative", "uri", "localhost", "fragment"]
-)
-def test_local_sources_and_relative_run(tmp_path, monkeypatch, location):
+@pytest.mark.parametrize("location", ["path", "relative", "uri", "localhost", "fragment"])
+def test_local_sources_and_relative_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, location: str
+) -> None:
     directory = tmp_path / "space é # %"
     directory.mkdir()
     tool = directory / "tool.cwl"
@@ -103,11 +116,13 @@ def test_local_sources_and_relative_run(tmp_path, monkeypatch, location):
         "fragment": source.as_uri() + "#main",
     }
     processes = index(load_cwl_from_location(locations[location]))
-    assert processes["main"].steps[0].run == "#tool"
+    root = processes["main"]
+    assert isinstance(root, Workflow)
+    assert root.steps[0].run == "#tool"
     assert processes["tool"].class_ == "CommandLineTool"
 
 
-def test_unsaved_text_retains_base_for_relative_run(tmp_path):
+def test_unsaved_text_retains_base_for_relative_run(tmp_path: Path) -> None:
     (tmp_path / "tool.cwl").write_text("cwlVersion: v1.2\nid: tool\n" + TOOL)
     source = tmp_path / "main.cwl"
     source.write_text(workflow("    run: tool.cwl\n"))
@@ -127,24 +142,26 @@ def test_unsaved_text_retains_base_for_relative_run(tmp_path):
         ("file:relative.cwl", "absolute path"),
     ],
 )
-def test_reject_unsupported_file_uris(uri, message):
+def test_reject_unsupported_file_uris(uri: str, message: str) -> None:
     with pytest.raises(ValueError, match=message):
         load_cwl_from_location(uri)
 
 
-def test_missing_file_uri(tmp_path):
+def test_missing_file_uri(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="Invalid source"):
         load_cwl_from_location((tmp_path / "missing.cwl").as_uri())
 
 
-def test_duplicate_inline_ids_rejected():
-    tool1 = SimpleNamespace(id="file:///main.cwl#tool")
-    tool2 = SimpleNamespace(id=tool1.id)
-    parent = SimpleNamespace(
+def test_duplicate_inline_ids_rejected() -> None:
+    tool1 = CommandLineTool(id="file:///main.cwl#tool", inputs=[], outputs=[])
+    tool2 = CommandLineTool(id=tool1.id, inputs=[], outputs=[])
+    parent = Workflow(
+        inputs=[],
+        outputs=[],
         id="main",
         steps=[
-            SimpleNamespace(id="first", run=tool1),
-            SimpleNamespace(id="second", run=tool2),
+            WorkflowStep(id="first", in_=[], out=[], run=tool1),
+            WorkflowStep(id="second", in_=[], out=[], run=tool2),
         ],
     )
     with pytest.raises(ValueError, match="Duplicate inline process identifier"):

@@ -12,15 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""Resolve embedded and external CWL runs and normalize local references."""
+
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypeVar
 from urllib.parse import urldefrag
 
 from cwl_utils.parser import Workflow
 from loguru import logger
 
 from .utils import contains_process, get_ids, to_index
+
+_ReferenceValue = TypeVar("_ReferenceValue", str, list[str], None)
 
 ORIGINAL_CWLVERSION = "http://commonwl.org/cwltool#original_cwlVersion"
 
@@ -48,9 +52,7 @@ def _clean_part(value: str, separator: str | None = "/") -> str:
     return value.split(separator)[-1]
 
 
-def _clean_values(
-    value: str | list[str], separator: str | None = "/"
-) -> str | list[str]:
+def _clean_values(value: str | list[str], separator: str | None = "/") -> str | list[str]:
     if isinstance(value, list):
         return [_clean_part(value=item, separator=separator) for item in value]
 
@@ -62,9 +64,7 @@ def _remove_parameter_refs(process: Process) -> None:
         for parameter in parameters:
             parameter.id = _clean_part(parameter.id)
             if hasattr(parameter, "outputSource") and parameter.outputSource:
-                parameter.outputSource = _clean_values(
-                    parameter.outputSource, f"#{process.id}/"
-                )
+                parameter.outputSource = _clean_values(parameter.outputSource, f"#{process.id}/")
 
 
 def _remove_step_refs(process: Process) -> None:
@@ -123,12 +123,12 @@ def _select_referenced_process(
 
 def _append_referenced_process(
     current: Process,
-    process: Process | list[Process],
     accumulator: list[Process],
     step: Any,
     run_url: str,
 ) -> None:
-    if contains_process(current.id, process):
+    """Append an imported process and link its step, rejecting duplicate IDs."""
+    if contains_process(current.id, accumulator):
         raise Exception(
             f"Cannot import {current.class_} {current.id} declared in {run_url}, "
             "'id' already present in embedding CWL document"
@@ -140,12 +140,17 @@ def _append_referenced_process(
 def _dereference_step(
     step: Any,
     parent: Process,
-    process: Process | list[Process],
     accumulator: list[Process],
     uri: str,
     session: requests.Session,
     loader: CwlLoader,
 ) -> None:
+    """Import an external run into the graph and replace the step reference.
+
+    Raises:
+        ValueError: If an imported graph lacks an unambiguous entry point.
+        Exception: If the selected process is missing or duplicates an existing ID.
+    """
     logger.debug(f"Checking if {step.run} must be externally imported...")
     run_url, fragment = urldefrag(step.run)
     logger.debug(f"run_url: {run_url} - uri: {uri}")
@@ -155,48 +160,47 @@ def _dereference_step(
 
     referenced = loader(path=run_url, session=session)
     referenced_index = to_index(referenced) if isinstance(referenced, list) else {}
-    referenced = _select_referenced_process(
-        referenced, referenced_index, fragment, step, parent
-    )
+    referenced = _select_referenced_process(referenced, referenced_index, fragment, step, parent)
 
     if isinstance(referenced, list):
         if len(referenced) != 1:
-            raise ValueError(
-                f"No entry point provided for $graph referenced by {step.run}"
-            )
-        _append_referenced_process(referenced[0], process, accumulator, step, run_url)
+            raise ValueError(f"No entry point provided for $graph referenced by {step.run}")
+        _append_referenced_process(referenced[0], accumulator, step, run_url)
         return
 
-    _append_referenced_process(referenced, process, accumulator, step, run_url)
+    _append_referenced_process(referenced, accumulator, step, run_url)
     if isinstance(referenced, Workflow):
-        for inner_step in getattr(referenced, "steps", []):
-            accumulator.append(referenced_index[inner_step.run.split("#")[-1]])
+        accumulator.extend(
+            referenced_index[inner_step.run.split("#")[-1]] for inner_step in referenced.steps
+        )
+
+
+def _rebase_reference(value: _ReferenceValue, old: str, new: str) -> _ReferenceValue:
+    """Replace a process prefix in a scalar or list of local references."""
+    if isinstance(value, list):
+        return [_rebase_reference(item, old, new) for item in value]
+    if isinstance(value, str) and (value == old or value.startswith(f"{old}/")):
+        return new + value[len(old) :]
+    return value
 
 
 def _rebase_inline_references(process: Process, old: str, new: str) -> None:
     """Rebase anonymous process IDs and their local wiring before cleanup."""
 
-    def rebase(value):
-        if isinstance(value, list):
-            return [rebase(item) for item in value]
-        if isinstance(value, str) and (value == old or value.startswith(f"{old}/")):
-            return new + value[len(old) :]
-        return value
-
     process.id = new
     for parameter in [*process.inputs, *process.outputs]:
-        parameter.id = rebase(parameter.id)
+        parameter.id = _rebase_reference(parameter.id, old, new)
         if hasattr(parameter, "outputSource"):
-            parameter.outputSource = rebase(parameter.outputSource)
+            parameter.outputSource = _rebase_reference(parameter.outputSource, old, new)
     for step in getattr(process, "steps", []):
-        step.id = rebase(step.id)
+        step.id = _rebase_reference(step.id, old, new)
         for item in step.in_:
-            item.id = rebase(item.id)
-            item.source = rebase(item.source)
-        step.out = rebase(step.out)
-        step.scatter = rebase(step.scatter)
+            item.id = _rebase_reference(item.id, old, new)
+            item.source = _rebase_reference(item.source, old, new)
+        step.out = _rebase_reference(step.out, old, new)
+        step.scatter = _rebase_reference(step.scatter, old, new)
         if isinstance(step.run, str):
-            step.run = rebase(step.run)
+            step.run = _rebase_reference(step.run, old, new)
 
 
 def _lift_inline_processes(processes: list[Process], uri: str) -> None:
@@ -235,7 +239,6 @@ def _dereference_steps(
             _dereference_step(
                 step,
                 parent,
-                result,
                 result,
                 uri,
                 session,

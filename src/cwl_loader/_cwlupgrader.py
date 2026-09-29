@@ -35,9 +35,7 @@ _upgrader.process_imports = _skip_process_imports
 
 def _to_commented_yaml(value: Any) -> Any:
     if isinstance(value, Mapping):
-        return CommentedMap(
-            (key, _to_commented_yaml(item)) for key, item in value.items()
-        )
+        return CommentedMap((key, _to_commented_yaml(item)) for key, item in value.items())
     if isinstance(value, list):
         return [_to_commented_yaml(item) for item in value]
     return value
@@ -68,7 +66,6 @@ def _upgrade_document(
     )
     if not isinstance(upgraded, CommentedMap):
         raise ValueError(
-            f"Cannot upgrade CWL document from {raw_process[_CWL_VERSION]} "
-            f"to {cwl_version}"
+            f"Cannot upgrade CWL document from {raw_process[_CWL_VERSION]} to {cwl_version}"
         )
     return upgraded

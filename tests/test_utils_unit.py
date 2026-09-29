@@ -1,8 +1,14 @@
 import sys
 from pathlib import Path
 from types import SimpleNamespace
+from typing import TYPE_CHECKING
 from unittest import TestCase
-from unittest.mock import patch
+
+from cwl_utils.parser.cwl_v1_2 import CommandLineTool, Workflow, WorkflowStep
+
+if TYPE_CHECKING:
+    from cwl_utils.parser import Process
+
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
@@ -15,14 +21,8 @@ from cwl_loader.utils import (
 )
 
 
-class FakeWorkflow:
-    def __init__(self, process_id, steps):
-        self.id = process_id
-        self.steps = steps
-
-
 class UtilsUnitTests(TestCase):
-    def test_to_index_skips_items_without_id(self):
+    def test_to_index_skips_items_without_id(self) -> None:
         proc1 = SimpleNamespace(id="a")
         proc2 = SimpleNamespace(id="b")
         no_id = SimpleNamespace()
@@ -31,10 +31,10 @@ class UtilsUnitTests(TestCase):
 
         self.assertEqual({"a": proc1, "b": proc2}, result)
 
-    def test_search_and_contains_process(self):
-        proc1 = SimpleNamespace(id="wf")
-        proc2 = SimpleNamespace(id="tool")
-        graph = [proc1, proc2]
+    def test_search_and_contains_process(self) -> None:
+        proc1 = CommandLineTool(id="wf", inputs=[], outputs=[])
+        proc2 = CommandLineTool(id="tool", inputs=[], outputs=[])
+        graph: list[Process] = [proc1, proc2]
 
         self.assertIs(search_process("wf", graph), proc1)
         self.assertIs(search_process("tool", proc2), proc2)
@@ -42,34 +42,34 @@ class UtilsUnitTests(TestCase):
         self.assertTrue(contains_process("wf", graph))
         self.assertFalse(contains_process("missing", graph))
 
-    def test_assert_process_contained_raises_for_missing_process(self):
-        graph = [SimpleNamespace(id="wf")]
+    def test_assert_process_contained_raises_for_missing_process(self) -> None:
+        graph: list[Process] = [CommandLineTool(id="wf", inputs=[], outputs=[])]
 
         with self.assertRaises(ValueError) as ctx:
             assert_process_contained("missing", graph)
 
         self.assertIn("Process missing does not exist", str(ctx.exception))
 
-    def test_assert_connected_graph_reports_unresolved_runs(self):
-        workflow = FakeWorkflow(
-            process_id="wf",
-            steps=[SimpleNamespace(id="s1", run="#tool")],
+    def test_assert_connected_graph_reports_unresolved_runs(self) -> None:
+        workflow = Workflow(
+            id="wf",
+            inputs=[],
+            outputs=[],
+            steps=[WorkflowStep(id="s1", in_=[], out=[], run="#tool")],
         )
 
-        with (
-            patch("cwl_loader.utils.get_args", return_value=(FakeWorkflow,)),
-            self.assertRaises(ValueError) as ctx,
-        ):
+        with self.assertRaises(ValueError) as ctx:
             assert_connected_graph([workflow])
 
         self.assertIn("wf.steps.s1 = #tool", str(ctx.exception))
 
-    def test_assert_connected_graph_passes_when_all_links_are_resolved(self):
-        workflow = FakeWorkflow(
-            process_id="wf",
-            steps=[SimpleNamespace(id="s1", run="#tool")],
+    def test_assert_connected_graph_passes_when_all_links_are_resolved(self) -> None:
+        workflow = Workflow(
+            id="wf",
+            inputs=[],
+            outputs=[],
+            steps=[WorkflowStep(id="s1", in_=[], out=[], run="#tool")],
         )
-        tool = SimpleNamespace(id="tool")
+        tool = CommandLineTool(id="tool", inputs=[], outputs=[])
 
-        with patch("cwl_loader.utils.get_args", return_value=(FakeWorkflow,)):
-            assert_connected_graph([workflow, tool])
+        assert_connected_graph([workflow, tool])

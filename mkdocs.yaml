@@ -23,7 +23,7 @@ repo_name: Terradue/cwl-loader
 
 theme:
     logo: imgs/icon-eoap.png
-    name: material
+    name: readthedocs
 
     palette:
     - media: "(prefers-color-scheme: light)"
@@ -39,6 +39,10 @@ theme:
 
 plugins:
   - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
   - mermaid2:
       version: 11.4.1
   - mkdocs-jupyter:
@@ -89,7 +93,7 @@ nav:
   - Reference:
     - Overview: reference/index.md
     - CLI migration: reference/cli.md
-    - API: api/latest/cwl_loader.md
+    - APIs: reference/api.md
   - Explanation:
     - Overview: explanation/index.md
     - Loading model: explanation/loading-model.md

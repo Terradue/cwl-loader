@@ -2,6 +2,8 @@
 
 [![PyPI - Version](https://img.shields.io/pypi/v/cwl-loader.svg)](https://pypi.org/project/cwl-loader)
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/cwl-loader.svg)](https://pypi.org/project/cwl-loader)
+[![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/transpiler-mate/cwl-loader/package.yaml?branch=develop&event=push&label=build&logo=githubactions)](https://github.com/transpiler-mate/cwl-loader/actions/workflows/package.yaml?query=branch%3Adevelop)
+[![Code coverage](https://img.shields.io/codecov/c/github/transpiler-mate/cwl-loader/develop?logo=codecov)](https://app.codecov.io/gh/transpiler-mate/cwl-loader/tree/develop)
 
 `cwl-loader` provides utilities to load CWL documents (local files, URLs, streams, or strings) into [cwl-utils](https://github.com/common-workflow-language/cwl-utils) object models, normalize references, and sort dependency graphs.
 
