@@ -45,7 +45,7 @@ classifiers = [
   "Programming Language :: Python :: Implementation :: PyPy",
 ]
 dependencies = [
-  "cwl-utils>=0.44",
+  "cwl-utils>=0.45",
   "cwl-upgrader==1.2.15",
   "loguru==0.7.3",
 ]
